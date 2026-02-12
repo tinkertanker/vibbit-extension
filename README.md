@@ -1,131 +1,130 @@
-# MakeCode AI — Client
+# MakeCode AI for Schools
 
-This repo includes two **client-side** scripts that talk to your MakeCode AI server and paste generated code directly into the MakeCode editor.
+This repository provides a MakeCode AI panel that supports both deployment models in one version:
 
-* `client.js` — a **userscript** that injects a movable UI panel (engine picker, prompt box, Generate & Revert).
-* `work.js` — a **bookmarklet** version you can paste into a browser bookmark. It shows a minimal UI and (in the original flow) asked for an API key.
+- `Managed` mode: your school uses your hosted backend (`/mcai/generate`)
+- `BYOK` mode: a school enters its own provider/model/key in the panel
 
-> The server handles model selection and stores API keys. The client **never** needs model keys if your server is set up with an OpenRouter key.
+## Supported keys and endpoints
 
----
+### Managed mode
 
-## 1) `client.js` (recommended)
+- Optional app token: `APP_TOKEN` (sent as `Authorization: Bearer <token>`)
+- Endpoint used by the client:
+  - `POST {BACKEND}/mcai/generate`
+- Request payload:
+  - `target`: `microbit | arcade | maker`
+  - `request`: natural-language prompt
+  - `currentCode`: optional current editor code
 
-### What it does
+### BYOK mode
 
-* Adds a floating panel on MakeCode (`micro:bit`, `Arcade`, `Maker`).
-* Lets you type a prompt, choose the target (micro:bit/Arcade/Maker), and paste the generated code back into the editor.
-* The **Engine** dropdown reflects presets from your server (`/mcai/config`). When you pick a different engine, it tells the server to switch the active preset.
+- Provider keys:
+  - OpenAI API key (Bearer auth)
+  - Gemini API key (Google Generative Language API key)
+  - OpenRouter API key (Bearer auth)
+- Provider endpoints:
+  - OpenAI: `https://api.openai.com/v1/chat/completions`
+  - Gemini: `https://generativelanguage.googleapis.com/v1/models/{model}:generateContent`
+  - OpenRouter: `https://openrouter.ai/api/v1/chat/completions`
 
-### Configure
+## Files
 
-Open `client.js` and set:
+- `work.js`: primary runtime script (bookmarklet and extension source)
+- `client.js`: earlier userscript variant kept in repo
+- `extension/manifest.json`: Chrome extension manifest template
+- `scripts/build.mjs`: builds `dist/` extension files from `work.js`
+- `scripts/package.mjs`: zips `dist/` into `artifacts/makecode-ai-extension.zip`
+
+## Runtime modes
+
+### Managed mode
+
+- Uses `BACKEND` + optional `APP_TOKEN`
+- Sends `target`, `request`, and optional `currentCode` to `/mcai/generate`
+- Best for centrally managed school roll-outs
+
+### BYOK mode
+
+- School chooses provider (`OpenAI`, `Gemini`, `OpenRouter`)
+- School supplies model + API key in the panel
+- Key is stored in browser local storage for convenience
+- Useful for schools that prefer to use their own billing and policy setup
+
+## Configure defaults
+
+In `work.js`:
 
 ```js
-// where your server is hosted
 const BACKEND = "https://mcai.dev.tk.sg";
-
-// only if your server enforces bearer auth (SERVER_APP_TOKEN in .env)
 const APP_TOKEN = "";
 ```
 
-### Install & run
+Set `APP_TOKEN` only if your backend enforces bearer auth.
 
-1. Load MakeCode (e.g., [https://makecode.microbit.org](https://makecode.microbit.org)) and open a project (so the code editor exists).
-2. Run `client.js` using your preferred userscript approach (any manager is fine).
-3. Click the **AI** button to open the panel.
-4. Pick **Engine** (optional — server default is already selected).
-5. Pick **Target** (micro:bit, Arcade, Maker), tick **Use current code** if you want to include your existing editor code as context.
-6. Type a prompt and hit **Generate & Paste**.
-7. If needed, click **Revert** to restore the previous code snapshot.
+## Build extension
 
-### Notes
-
-* The client reads & writes the MakeCode editor via the page’s embedded Monaco instance.
-* Model presets and access are fully controlled by the server (`/mcai/config` and `resolvePreset()` mapping).
-* The panel is draggable and resizable. If you resize to full height, the feedback/log area remains scrollable.
-
----
-
-## 2) `work.js` (bookmarklet)
-
-### What it does
-
-A compact “no-install” option:
-
-* You store the script as a bookmark.
-* Clicking the bookmark injects a tiny overlay to send your prompt to the server and paste the response.
-
-### Configure
-
-Open `work.js` and set:
-
-```js
-const BACKEND = "https://mcai.dev.tk.sg";
-const APP_TOKEN = ""; // optional, only if your server requires it
+```bash
+npm run build
 ```
 
-> The **original** `work.js` asked the user for an API key and spoke directly to a model provider. In the new architecture the **server holds the key**, so you should **remove any API-key prompt** from `work.js` and just call your server’s `/mcai/generate`.
+Outputs:
 
-### Make it a bookmarklet
+- `dist/content-script.js`
+- `dist/manifest.json`
 
-1. Minify or wrap `work.js` like:
+Optional build-time backend overrides:
 
-   ```html
-   javascript:(()=>{ /* paste minified work.js here */ })();
-   ```
-2. Create a new bookmark and paste the whole line into the **URL** field.
-3. On MakeCode, click the bookmark to open the overlay and use it.
+```bash
+MCAI_BACKEND="https://your-server.example" MCAI_APP_TOKEN="optional-token" npm run build
+```
 
----
+## Package extension zip
 
-## Endpoints the client calls
+```bash
+npm run package
+```
 
-* `GET /mcai/config` — gets `{ activePreset, presets[] }` to populate the Engine dropdown.
-* `POST /mcai/config` — sets `{ preset }` when you choose a different engine.
-* `POST /mcai/generate` — body:
+This builds first, then creates:
 
-  ```json
-  {
-    "target": "microbit | arcade | maker",
-    "request": "natural-language prompt",
-    "currentCode": "optional, the code currently in the editor"
-  }
-  ```
+- `artifacts/makecode-ai-extension.zip`
 
----
+## Install in Chrome
+
+1. Open `chrome://extensions`
+2. Enable **Developer mode**
+3. Click **Load unpacked**
+4. Select this repo's `dist/` directory
+5. Click **Reload** after each rebuild (`npm run build`) to test the latest code
+
+## Browser testing quickstart
+
+1. Build a fresh bundle:
+   - `npm run package`
+2. Confirm artefacts exist:
+   - `dist/content-script.js`
+   - `dist/manifest.json`
+   - `artifacts/makecode-ai-extension.zip`
+3. Load unpacked extension from `dist/` in Chrome.
+4. Open one MakeCode editor page, for example:
+   - `https://makecode.microbit.org/`
+5. Managed smoke test:
+   - choose `Managed (school account)`
+   - enter a simple prompt
+   - confirm code is generated and pasted, then test `Revert`
+6. BYOK smoke test:
+   - switch to `Bring your own key`
+   - select provider + model, enter key
+   - confirm generation and paste both work
+7. If updating config values (`MCAI_BACKEND` or `MCAI_APP_TOKEN`), rebuild and reload the extension.
+
+## Bookmarklet usage
+
+You can also run `work.js` as a bookmarklet payload. The same panel supports both `Managed` and `BYOK` modes.
 
 ## Troubleshooting
 
-* **Panel appears but generation fails**
-
-  * Open the browser console; look for messages like `Proxy error: OPENROUTER_API_KEY missing`.
-    → Fix your server `.env` and restart the server.
-
-* **CORS error in console**
-
-  * Add your site to `CORS_ORIGINS` on the server (comma-separated) and restart.
-
-* **“Unauthorized”**
-
-  * Your server sets `SERVER_APP_TOKEN`. Put the same token in `APP_TOKEN` near the top of `client.js` (or `work.js`).
-
-* **Buttons hidden / UI too tall**
-
-  * Drag the panel by its header or resize from the bottom-right handle; the log area scrolls.
-
-* **Engine list empty**
-
-  * Ensure your server is reachable at `BACKEND` and returns presets at `/mcai/config`.
-  * Check the network tab for the request/response.
-
----
-
-## File map (client only)
-
-```
-client.js   # full-featured client panel (recommended)
-work.js     # bookmarklet client (minimal)
-```
-
-That’s it—point the client to your server and you’re good to go.
+- `Request failed: Unauthorized`: verify `APP_TOKEN` and server settings.
+- `No code returned`: try a clearer prompt or switch model in BYOK mode.
+- `Monaco not found`: open an actual MakeCode project first (not the landing page).
+- `CORS/network errors`: ensure backend origins are allowed; for BYOK, check provider key and API availability.

@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "MakeCode AI Panel",
+  "description": "Inject a MakeCode AI panel into MakeCode editors.",
+  "version": "0.1.0",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://makecode.microbit.org/*",
+        "https://arcade.makecode.com/*",
+        "https://maker.makecode.com/*"
+      ],
+      "js": [
+        "content-script.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": [
+    "https://mcai.dev.tk.sg/*",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://openrouter.ai/*"
+  ]
+}
