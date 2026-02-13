@@ -23,9 +23,9 @@ const screenshots = {
 const checks = [];
 let overallPass = true;
 
-function pushCheck(step, pass, detail) {
-  checks.push({ step, result: pass ? "PASS" : "FAIL", detail: trimForTable(detail) });
-  if (!pass) overallPass = false;
+function pushCheck(step, result, detail) {
+  checks.push({ step, result, detail: trimForTable(detail) });
+  if (result === "FAIL") overallPass = false;
 }
 
 function overrideConst(source, name, value) {
@@ -74,6 +74,9 @@ function createProxyHandler(counter) {
 
     const responseHeaders = {};
     response.headers.forEach((value, key) => {
+      if (key.toLowerCase() === "content-encoding") return;
+      if (key.toLowerCase() === "content-length") return;
+      if (key.toLowerCase() === "transfer-encoding") return;
       responseHeaders[key] = value;
     });
 
@@ -170,7 +173,7 @@ if (!hasManaged && !hasByok) {
   const message = envLoad.exists
     ? `No live secrets available in ${envLoad.envFile}.`
     : `No live secrets available. Create ${envLoad.envFile} from .env.audit.example.`;
-  pushCheck("Secrets discovery", false, message);
+  pushCheck("Secrets discovery", requireSecrets ? "FAIL" : "SKIPPED", message);
 
   const reportPath = path.join(runDir, "REPORT.md");
   const report = [
@@ -207,7 +210,7 @@ await runCommand("npm", ["run", "package"], { cwd: repoRoot, env: buildEnv });
 await assertFileExists(path.join(repoRoot, "dist", "content-script.js"));
 await assertFileExists(path.join(repoRoot, "dist", "manifest.json"));
 await assertFileExists(path.join(repoRoot, "artifacts", "bit-vibe-extension.zip"));
-pushCheck("Build + package (live)", true, "Build/package succeeded with live audit environment overrides.");
+pushCheck("Build + package (live)", "PASS", "Build/package succeeded with live audit environment overrides.");
 
 let runtimeSource = await readFile(path.join(repoRoot, "work.js"), "utf8");
 if (hasManaged) {
@@ -222,7 +225,8 @@ try {
   await ensureAuditRuntime(page, runtimeSource);
 
   if (hasManaged) {
-    const managedTarget = new URL("/mcai/generate", managedBackend).toString();
+    // Mirror runtime construction exactly: BACKEND + "/mcai/generate"
+    const managedTarget = managedBackend + "/mcai/generate";
     const managedProxyCounter = { count: 0 };
     const managedProxyHandler = createProxyHandler(managedProxyCounter);
     const managedPattern = new RegExp(`^${managedTarget.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
@@ -240,13 +244,13 @@ try {
     const managedPass = managedState.status === "Done";
     pushCheck(
       "Managed live request",
-      managedPass,
+      managedPass ? "PASS" : "FAIL",
       `status='${managedState.status}', proxiedRequests=${managedProxyCounter.count}, logHasManaged=${managedState.log.includes("Mode: Managed backend.")}.`
     );
 
     await page.unroute(managedPattern, managedProxyHandler);
   } else {
-    pushCheck("Managed live request", true, "Skipped (AUDIT_MANAGED_BACKEND not set).");
+    pushCheck("Managed live request", "SKIPPED", "Skipped (AUDIT_MANAGED_BACKEND not set).");
   }
 
   if (hasByok && providerConfig) {
@@ -268,13 +272,13 @@ try {
     const byokPass = byokState.status === "Done";
     pushCheck(
       `BYOK live request (${providerConfig.provider})`,
-      byokPass,
+      byokPass ? "PASS" : "FAIL",
       `status='${byokState.status}', proxiedRequests=${byokProxyCounter.count}, logHasByok=${byokState.log.includes("Mode: BYOK.")}.`
     );
 
     await page.unroute(providerConfig.endpointRegex, byokProxyHandler);
   } else {
-    pushCheck("BYOK live request", true, "Skipped (provider key not configured).");
+    pushCheck("BYOK live request", "SKIPPED", "Skipped (provider key not configured).");
   }
 } catch (error) {
   overallPass = false;
@@ -283,7 +287,7 @@ try {
   } catch {
     // Keep the primary failure context.
   }
-  pushCheck("Live audit execution", false, error && error.message ? error.message : String(error));
+  pushCheck("Live audit execution", "FAIL", error && error.message ? error.message : String(error));
 } finally {
   await browser.close();
 }
