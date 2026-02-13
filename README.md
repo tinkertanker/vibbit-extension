@@ -1,9 +1,9 @@
-# bit:vibe for Schools
+# bit:vibe for micro:bit
 
-This repository provides the `bit:vibe` panel for MakeCode and supports both deployment models in one version:
+This repository provides the `bit:vibe` panel for MakeCode micro:bit and supports both deployment models in one version:
 
-- `Managed` mode: your school uses your hosted backend (`/mcai/generate`)
-- `BYOK` mode: a school enters its own provider/model/key in the panel
+- `Managed` mode: you use a hosted backend (`/mcai/generate`)
+- `BYOK` mode: you enter your own provider/model/key in the panel
 
 ## Supported keys and endpoints
 
@@ -42,14 +42,14 @@ This repository provides the `bit:vibe` panel for MakeCode and supports both dep
 
 - Uses `BACKEND` + optional `APP_TOKEN`
 - Sends `target`, `request`, and optional `currentCode` to `/mcai/generate`
-- Best for centrally managed school roll-outs
+- Best for centrally managed roll-outs
 
 ### BYOK mode
 
 - School chooses provider (`OpenAI`, `Gemini`, `OpenRouter`)
 - School supplies model + API key in the panel
 - Key is stored in browser local storage for convenience
-- Useful for schools that prefer to use their own billing and policy setup
+- Useful when teams prefer to use their own billing and policy setup
 
 ## Configure defaults
 
@@ -109,7 +109,7 @@ This builds first, then creates:
 4. Open one MakeCode editor page, for example:
    - `https://makecode.microbit.org/`
 5. Managed smoke test:
-   - choose `Managed (school account)`
+   - choose `Managed`
    - enter a simple prompt
    - confirm code is generated and pasted, then test `Revert`
 6. BYOK smoke test:
@@ -128,3 +128,12 @@ You can also run `work.js` as a bookmarklet payload. The same panel supports bot
 - `No code returned`: try a clearer prompt or switch model in BYOK mode.
 - `Monaco not found`: open an actual MakeCode project first (not the landing page).
 - `CORS/network errors`: ensure backend origins are allowed; for BYOK, check provider key and API availability.
+
+## Credits
+
+Kickstarted during work attachment by:
+
+- [Atharv Pandit](https://github.com/Avi123-codes)
+- [Josiah Menon](https://github.com/OsiahMelon)
+
+Raffles Institution Year 4 (2025).
