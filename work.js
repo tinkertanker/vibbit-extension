@@ -11,6 +11,29 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const STORAGE_KEY = "__bitvibe_key";
   const STORAGE_PROVIDER = "__bitvibe_provider";
   const STORAGE_MODEL = "__bitvibe_model";
+  const STORAGE_SETUP_DONE = "__bitvibe_setup_done";
+  const STORAGE_SERVER = "__bitvibe_server";
+  const STORAGE_TARGET = "__bitvibe_target";
+
+  const MODEL_PRESETS = {
+    openai: [
+      { id: "gpt-5-mini", label: "GPT-5 Mini" },
+      { id: "gpt-5.2", label: "GPT-5.2" },
+      { id: "gpt-5.2-codex", label: "GPT-5.2 Codex", default: true }
+    ],
+    gemini: [
+      { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", default: true },
+      { id: "gemini-3-pro-preview", label: "Gemini 3 Pro" }
+    ],
+    openrouter: [
+      { id: "deepseek/deepseek-v3.2", label: "DeepSeek V3.2" },
+      { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash" },
+      { id: "z-ai/glm-5", label: "GLM-5" },
+      { id: "x-ai/grok-4.1-fast", label: "Grok 4.1 Fast" },
+      { id: "moonshotai/kimi-k2.5", label: "Kimi K2.5", default: true },
+      { id: "minimax/minimax-m2.5", label: "MiniMax M2.5" }
+    ]
+  };
 
   const storageGet = (key) => {
     try {
@@ -28,64 +51,192 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     }
   };
 
+  /* ── shared styles ───────────────────────────────────────── */
+  const S_LABEL = "font-size:11px;color:#9eb2ff;text-transform:uppercase;letter-spacing:0.08em";
+  const S_SELECT = "width:100%;padding:8px;border-radius:8px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef;cursor:pointer";
+  const S_INPUT = "width:100%;padding:8px;border-radius:8px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef;box-sizing:border-box";
+  const S_BTN_PRIMARY = "width:100%;padding:10px;border:none;border-radius:8px;background:#3b82f6;color:#fff;font-weight:600;cursor:pointer;font-size:13px";
+  const S_ICON_BTN = "background:transparent;border:none;color:#93a4c4;cursor:pointer;padding:4px;display:flex;align-items:center";
+  const CLOSE_SVG = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 1l12 12M13 1L1 13"/></svg>';
+
+  /* ── panel container ─────────────────────────────────────── */
   const ui = document.createElement("div");
   ui.id = "bitvibe-panel";
   ui.style.cssText = "position:fixed;right:12px;bottom:12px;width:460px;max-height:84vh;overflow:auto;background:#0b1020;color:#e6e8ef;font-family:system-ui,Segoe UI,Arial,sans-serif;border:1px solid #21304f;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:none;flex-direction:column;z-index:2147483647;transform-origin:bottom right;transition:transform .2s ease,opacity .2s ease";
+
+  /* ── build HTML ──────────────────────────────────────────── */
   ui.innerHTML = ""
-    + '<div id="h" style="cursor:move;display:flex;align-items:center;padding:10px 12px;background:#111936;border-bottom:1px solid #21304f">'
+    /* ═══ VIEW 1: SETUP ═══ */
+    + '<div id="bv-setup" style="display:none;flex-direction:column">'
+
+    /* header */
+    + '<div id="h-setup" style="cursor:move;display:flex;align-items:center;padding:10px 12px;background:#111936;border-bottom:1px solid #21304f">'
     + '  <span style="font-weight:600;font-size:13px">bit:vibe</span>'
-    + '  <span id="status" style="margin-left:10px;font-size:11px;color:#9bb1dd">Idle</span>'
-    + '  <button id="x" aria-label="Close" style="margin-left:auto;background:transparent;border:none;color:#93a4c4;cursor:pointer;padding:4px;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 1l12 12M13 1L1 13"/></svg></button>'
-    + "</div>"
-    + '<div style="padding:10px 12px;display:grid;gap:8px;border-bottom:1px solid #21304f">'
-    + '  <div style="display:grid;gap:6px">'
-    + '    <div style="font-size:11px;color:#9eb2ff;text-transform:uppercase;letter-spacing:0.08em">Mode</div>'
-    + '    <select id="mode" style="padding:8px;border-radius:8px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef;cursor:pointer">'
-    + '      <option value="managed">Managed (school account)</option>'
+    + '  <button id="x-setup" aria-label="Close" style="margin-left:auto;' + S_ICON_BTN + '">' + CLOSE_SVG + '</button>'
+    + '</div>'
+
+    /* body */
+    + '<div style="padding:16px 14px;display:grid;gap:12px">'
+    + '  <div style="font-size:15px;font-weight:600;color:#e6e8ef">Welcome to bit:vibe</div>'
+
+    /* mode */
+    + '  <div style="display:grid;gap:4px">'
+    + '    <div style="' + S_LABEL + '">Mode</div>'
+    + '    <select id="setup-mode" style="' + S_SELECT + '">'
     + '      <option value="byok">Bring your own key</option>'
-    + "    </select>"
-    + "  </div>"
-    + '  <div id="managedHint" style="font-size:12px;color:#b8c6e8">Managed mode uses your configured backend at <span style="color:#d5e4ff">BACKEND</span>.</div>'
-    + '  <div id="byokRow" style="display:none;gap:8px">'
-    + '    <select id="prov" style="flex:1;padding:8px;border-radius:8px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef;cursor:pointer">'
+    + '      <option value="managed">Managed (school account)</option>'
+    + '    </select>'
+    + '  </div>'
+
+    /* BYOK: provider */
+    + '  <div id="setup-byok-provider" style="display:grid;gap:4px">'
+    + '    <div style="' + S_LABEL + '">Provider</div>'
+    + '    <select id="setup-prov" style="' + S_SELECT + '">'
     + '      <option value="openai">OpenAI</option>'
     + '      <option value="gemini">Gemini</option>'
     + '      <option value="openrouter">OpenRouter</option>'
-    + "    </select>"
-    + '    <input id="model" placeholder="gpt-4o-mini or gemini-2.5-flash or openrouter/auto" style="flex:1;padding:8px;border-radius:8px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef">'
-    + "  </div>"
-    + '  <div id="byokKeyRow" style="display:none;gap:8px">'
-    + '    <input id="key" type="password" placeholder="API key" style="flex:1;padding:8px;border-radius:8px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef">'
-    + '    <button id="save" style="padding:8px 12px;border:none;border-radius:8px;background:#16a34a;color:#fff;font-weight:600;cursor:pointer">Save Key</button>'
-    + "  </div>"
-    + '  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
-    + '    <select id="target" style="flex:1 1 48%;padding:8px;border-radius:8px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef;cursor:pointer">'
-    + '      <option value="microbit">micro:bit</option>'
-    + '      <option value="arcade">Arcade</option>'
-    + '      <option value="maker">Maker</option>'
-    + "    </select>"
-    + '    <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#c7d2fe;cursor:pointer"><input id="inc" type="checkbox" checked style="cursor:pointer">Use current code</label>'
-    + "  </div>"
-    + '  <textarea id="p" rows="3" placeholder="Describe what you want the block code to do - try to be specific" style="resize:vertical;min-height:64px;padding:8px;border-radius:8px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef"></textarea>'
+    + '    </select>'
+    + '  </div>'
+
+    /* BYOK: model */
+    + '  <div id="setup-byok-model" style="display:grid;gap:4px">'
+    + '    <div style="' + S_LABEL + '">Model</div>'
+    + '    <select id="setup-model" style="' + S_SELECT + '"></select>'
+    + '  </div>'
+
+    /* BYOK: API key */
+    + '  <div id="setup-byok-key" style="display:grid;gap:4px">'
+    + '    <div style="' + S_LABEL + '">API Key</div>'
+    + '    <input id="setup-key" type="password" placeholder="Paste your API key" style="' + S_INPUT + '">'
+    + '  </div>'
+
+    /* Managed: server URL */
+    + '  <div id="setup-managed-server" style="display:none">'
+    + '    <div style="display:grid;gap:4px">'
+    + '      <div style="' + S_LABEL + '">Server URL</div>'
+    + '      <input id="setup-server" placeholder="bitvibe.tk.sg" style="' + S_INPUT + '">'
+    + '    </div>'
+    + '  </div>'
+
+    /* get started */
+    + '  <button id="setup-go" style="' + S_BTN_PRIMARY + ';margin-top:4px">Get Started</button>'
+    + '</div>'
+    + '</div>'
+
+    /* ═══ VIEW 2: MAIN ═══ */
+    + '<div id="bv-main" style="display:none;flex-direction:column">'
+
+    /* header */
+    + '<div id="h-main" style="cursor:move;display:flex;align-items:center;padding:10px 12px;background:#111936;border-bottom:1px solid #21304f">'
+    + '  <span style="font-weight:600;font-size:13px">bit:vibe</span>'
+    + '  <span id="status" style="margin-left:10px;font-size:11px;color:#9bb1dd">Idle</span>'
+    + '  <button id="gear" aria-label="Settings" style="margin-left:auto;' + S_ICON_BTN + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.5.7l.3 1.7a5.4 5.4 0 011.5.6l1.4-1 1.6 1.6-1 1.4c.3.5.5 1 .6 1.5l1.7.3v2.2l-1.7.3a5.4 5.4 0 01-.6 1.5l1 1.4-1.6 1.6-1.4-1a5.4 5.4 0 01-1.5.6l-.3 1.7H4.3l-.3-1.7a5.4 5.4 0 01-1.5-.6l-1.4 1L-.5 11l1-1.4A5.4 5.4 0 01-.1 8.1l-1.7-.3V5.6l1.7-.3c.1-.5.3-1 .6-1.5l-1-1.4L1.1.8l1.4 1c.5-.3 1-.5 1.5-.6L4.3.5h2.2zM5.4 4.8a2.6 2.6 0 100 5.2 2.6 2.6 0 000-5.2z"/></svg></button>'
+    + '  <button id="x-main" aria-label="Close" style="margin-left:6px;' + S_ICON_BTN + '">' + CLOSE_SVG + '</button>'
+    + '</div>'
+
+    /* body */
+    + '<div style="padding:12px 14px;display:grid;gap:10px">'
+    + '  <textarea id="p" rows="6" placeholder="Describe what you want the block code to do \u2013 try to be specific" style="resize:vertical;min-height:96px;padding:10px;border-radius:8px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef;font-size:13px;line-height:1.4"></textarea>'
+    + '  <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#c7d2fe;cursor:pointer"><input id="inc" type="checkbox" checked style="cursor:pointer">Use current code</label>'
     + '  <div style="display:flex;gap:8px;flex-wrap:wrap">'
-    + '    <button id="go" style="flex:1 1 48%;padding:10px;border:none;border-radius:8px;background:#3b82f6;color:#fff;font-weight:600;cursor:pointer">Generate & Paste</button>'
+    + '    <button id="go" style="flex:1 1 48%;padding:10px;border:none;border-radius:8px;background:#3b82f6;color:#fff;font-weight:600;cursor:pointer">Generate &amp; Paste</button>'
     + '    <button id="revert" style="flex:1 1 48%;padding:10px;border:1px solid #2b3a5a;border-radius:8px;background:#223058;color:#e6e8ef;cursor:pointer" disabled>Revert</button>'
-    + "  </div>"
-    + "</div>"
-    + '<div id="fb" style="display:none;margin:12px;margin-top:0;padding:12px;border-radius:10px;background:linear-gradient(135deg,#1b2441,#101a33);border:1px solid #354b7d;box-shadow:0 4px 18px rgba(0,0,0,.3);">'
+    + '  </div>'
+    + '</div>'
+
+    /* feedback */
+    + '<div id="fb" style="display:none;margin:0 12px 10px;padding:12px;border-radius:10px;background:linear-gradient(135deg,#1b2441,#101a33);border:1px solid #354b7d;box-shadow:0 4px 18px rgba(0,0,0,.3);">'
     + '  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">'
     + '    <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#8fb7ff;display:flex;align-items:center;gap:6px;">'
     + '      <span style="display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;border-radius:50%;background:#3b82f6;color:#0b1020;font-weight:700;font-size:10px;">i</span>'
-    + "      Model Feedback"
-    + "    </div>"
+    + '      Model Feedback'
+    + '    </div>'
     + '    <button id="fbToggle" aria-label="Toggle feedback" style="background:rgba(148,163,255,0.15);color:#cdd9ff;border:1px solid rgba(148,163,255,0.3);border-radius:16px;padding:2px 10px;font-size:11px;font-weight:500;cursor:pointer;">Hide</button>'
-    + "  </div>"
+    + '  </div>'
     + '  <div id="fbLines" style="display:grid;gap:6px;font-size:12px;color:#e4ecff;line-height:1.35;"></div>'
-    + "</div>"
+    + '</div>'
+
+    /* log */
     + '<div id="log" style="padding:10px 12px;font-size:11px;color:#9bb1dd;display:block;max-height:200px;overflow:auto"></div>'
+    + '</div>'
+
+    /* ═══ VIEW 3: SETTINGS ═══ */
+    + '<div id="bv-settings" style="display:none;flex-direction:column">'
+
+    /* header */
+    + '<div id="h-settings" style="cursor:move;display:flex;align-items:center;padding:10px 12px;background:#111936;border-bottom:1px solid #21304f">'
+    + '  <button id="back" aria-label="Back" style="' + S_ICON_BTN + ';margin-right:6px"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L3 7l6 6"/></svg></button>'
+    + '  <span style="font-weight:600;font-size:13px">Settings</span>'
+    + '  <button id="x-settings" aria-label="Close" style="margin-left:auto;' + S_ICON_BTN + '">' + CLOSE_SVG + '</button>'
+    + '</div>'
+
+    /* body */
+    + '<div style="padding:14px;display:grid;gap:12px">'
+
+    /* mode */
+    + '  <div style="display:grid;gap:4px">'
+    + '    <div style="' + S_LABEL + '">Mode</div>'
+    + '    <select id="set-mode" style="' + S_SELECT + '">'
+    + '      <option value="byok">Bring your own key</option>'
+    + '      <option value="managed">Managed (school account)</option>'
+    + '    </select>'
+    + '  </div>'
+
+    /* BYOK: provider */
+    + '  <div id="set-byok-provider" style="display:grid;gap:4px">'
+    + '    <div style="' + S_LABEL + '">Provider</div>'
+    + '    <select id="set-prov" style="' + S_SELECT + '">'
+    + '      <option value="openai">OpenAI</option>'
+    + '      <option value="gemini">Gemini</option>'
+    + '      <option value="openrouter">OpenRouter</option>'
+    + '    </select>'
+    + '  </div>'
+
+    /* BYOK: model */
+    + '  <div id="set-byok-model" style="display:grid;gap:4px">'
+    + '    <div style="' + S_LABEL + '">Model</div>'
+    + '    <select id="set-model" style="' + S_SELECT + '"></select>'
+    + '  </div>'
+
+    /* BYOK: API key */
+    + '  <div id="set-byok-key" style="display:grid;gap:4px">'
+    + '    <div style="' + S_LABEL + '">API Key</div>'
+    + '    <div style="display:flex;gap:8px">'
+    + '      <input id="set-key" type="password" placeholder="API key" style="flex:1;padding:8px;border-radius:8px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef">'
+    + '      <button id="save" style="padding:8px 12px;border:none;border-radius:8px;background:#16a34a;color:#fff;font-weight:600;cursor:pointer;white-space:nowrap">Save Key</button>'
+    + '    </div>'
+    + '  </div>'
+
+    /* Managed: server URL */
+    + '  <div id="set-managed-server" style="display:none">'
+    + '    <div style="display:grid;gap:4px">'
+    + '      <div style="' + S_LABEL + '">Server URL</div>'
+    + '      <input id="set-server" placeholder="bitvibe.tk.sg" style="' + S_INPUT + '">'
+    + '    </div>'
+    + '  </div>'
+
+    /* advanced (collapsible) */
+    + '  <details id="set-advanced">'
+    + '    <summary style="cursor:pointer;font-size:12px;color:#9eb2ff;font-weight:500;user-select:none">Advanced</summary>'
+    + '    <div style="display:grid;gap:4px;margin-top:8px">'
+    + '      <div style="' + S_LABEL + '">Target</div>'
+    + '      <select id="set-target" style="' + S_SELECT + '">'
+    + '        <option value="microbit">micro:bit</option>'
+    + '        <option value="arcade">Arcade</option>'
+    + '        <option value="maker">Maker</option>'
+    + '      </select>'
+    + '    </div>'
+    + '  </details>'
+
+    + '</div>'
+    + '</div>'
+
+    /* resizer */
     + '<div id="rz" style="position:absolute;width:14px;height:14px;right:2px;bottom:2px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#2b3a5a 50%);opacity:.9"></div>';
+
   document.body.appendChild(ui);
 
+  /* ── FAB ─────────────────────────────────────────────────── */
   const fab = document.createElement("div");
   fab.id = "bitvibe-fab";
   fab.title = "bit:vibe \u2013 AI code generator";
@@ -125,24 +276,30 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   fab.onclick = openPanel;
   document.body.appendChild(fab);
 
+  /* ── element references ──────────────────────────────────── */
   const $ = (s) => ui.querySelector(s);
-  const header = $("#h");
-  const statusEl = $("#status");
-  const closeBtn = $("#x");
+
+  const views = { setup: $("#bv-setup"), main: $("#bv-main"), settings: $("#bv-settings") };
+  const headers = [$("#h-setup"), $("#h-main"), $("#h-settings")];
   const resizer = $("#rz");
 
-  const modeSel = $("#mode");
-  const managedHint = $("#managedHint");
-  const byokRow = $("#byokRow");
-  const byokKeyRow = $("#byokKeyRow");
-  const providerSel = $("#prov");
-  const keyInput = $("#key");
-  const modelInput = $("#model");
-  const saveBtn = $("#save");
+  /* setup view refs */
+  const setupMode = $("#setup-mode");
+  const setupProv = $("#setup-prov");
+  const setupModel = $("#setup-model");
+  const setupKey = $("#setup-key");
+  const setupServer = $("#setup-server");
+  const setupByokProvider = $("#setup-byok-provider");
+  const setupByokModel = $("#setup-byok-model");
+  const setupByokKey = $("#setup-byok-key");
+  const setupManagedServer = $("#setup-managed-server");
+  const setupGo = $("#setup-go");
 
-  const targetSel = $("#target");
-  const includeCurrent = $("#inc");
+  /* main view refs */
+  const statusEl = $("#status");
+  const gearBtn = $("#gear");
   const promptEl = $("#p");
+  const includeCurrent = $("#inc");
   const go = $("#go");
   const revertBtn = $("#revert");
   const log = $("#log");
@@ -150,6 +307,65 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const feedbackLines = $("#fbLines");
   const feedbackToggle = $("#fbToggle");
 
+  /* settings view refs */
+  const setMode = $("#set-mode");
+  const setProv = $("#set-prov");
+  const setModel = $("#set-model");
+  const setKey = $("#set-key");
+  const setServer = $("#set-server");
+  const setTarget = $("#set-target");
+  const setByokProvider = $("#set-byok-provider");
+  const setByokModel = $("#set-byok-model");
+  const setByokKey = $("#set-byok-key");
+  const setManagedServer = $("#set-managed-server");
+  const saveBtn = $("#save");
+  const backBtn = $("#back");
+
+  /* ── view switching ──────────────────────────────────────── */
+  const showView = (name) => {
+    Object.keys(views).forEach((key) => {
+      views[key].style.display = key === name ? "flex" : "none";
+    });
+  };
+
+  /* ── model preset population ─────────────────────────────── */
+  const populateModels = (selectEl, provider, savedModel) => {
+    selectEl.innerHTML = "";
+    const presets = MODEL_PRESETS[provider] || [];
+    let defaultId = null;
+    presets.forEach((preset) => {
+      const opt = document.createElement("option");
+      opt.value = preset.id;
+      opt.textContent = preset.label;
+      selectEl.appendChild(opt);
+      if (preset.default) defaultId = preset.id;
+    });
+    if (savedModel && presets.some((p) => p.id === savedModel)) {
+      selectEl.value = savedModel;
+    } else if (defaultId) {
+      selectEl.value = defaultId;
+    }
+  };
+
+  /* ── mode-dependent field visibility ─────────────────────── */
+  const applySetupMode = () => {
+    const isByok = setupMode.value === "byok";
+    setupByokProvider.style.display = isByok ? "grid" : "none";
+    setupByokModel.style.display = isByok ? "grid" : "none";
+    setupByokKey.style.display = isByok ? "grid" : "none";
+    setupManagedServer.style.display = isByok ? "none" : "grid";
+  };
+
+  const applySettingsMode = () => {
+    const isByok = setMode.value === "byok";
+    setByokProvider.style.display = isByok ? "grid" : "none";
+    setByokModel.style.display = isByok ? "grid" : "none";
+    setByokKey.style.display = isByok ? "grid" : "none";
+    setManagedServer.style.display = isByok ? "none" : "grid";
+    storageSet(STORAGE_MODE, setMode.value);
+  };
+
+  /* ── state ───────────────────────────────────────────────── */
   let undoStack = [];
   let busy = false;
   let feedbackCollapsed = false;
@@ -169,6 +385,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     log.innerHTML = "";
   };
 
+  /* ── feedback panel ──────────────────────────────────────── */
   const applyFeedbackCollapse = () => {
     if (feedbackCollapsed) {
       feedbackLines.style.display = "none";
@@ -215,39 +432,106 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     applyFeedbackCollapse();
   };
 
-  const applyMode = () => {
-    const isByok = modeSel.value === "byok";
-    byokRow.style.display = isByok ? "flex" : "none";
-    byokKeyRow.style.display = isByok ? "flex" : "none";
-    managedHint.style.display = isByok ? "none" : "block";
-    storageSet(STORAGE_MODE, modeSel.value);
-  };
+  /* ── resolve effective backend URL ───────────────────────── */
+  const DEFAULT_SERVER = BACKEND.replace(/^https?:\/\//, "");
 
-  try {
-    const savedMode = storageGet(STORAGE_MODE);
-    if (savedMode === "managed" || savedMode === "byok") {
-      modeSel.value = savedMode;
+  const getBackendUrl = () => {
+    const server = storageGet(STORAGE_SERVER);
+    if (server && server.trim()) {
+      const host = server.trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+      return "https://" + host;
     }
-    const savedKey = storageGet(STORAGE_KEY);
-    if (savedKey) keyInput.value = savedKey;
-    const savedProvider = storageGet(STORAGE_PROVIDER);
-    if (savedProvider) providerSel.value = savedProvider;
-    const savedModel = storageGet(STORAGE_MODEL);
-    if (savedModel) modelInput.value = savedModel;
-  } catch (error) {
-  }
-  applyMode();
+    return BACKEND;
+  };
 
-  modeSel.onchange = applyMode;
-  providerSel.onchange = () => {
-    storageSet(STORAGE_PROVIDER, providerSel.value);
+  /* ── load saved state ────────────────────────────────────── */
+  const savedMode = storageGet(STORAGE_MODE) || "byok";
+  const savedProvider = storageGet(STORAGE_PROVIDER) || "openai";
+  const savedModel = storageGet(STORAGE_MODEL);
+  const savedKey = storageGet(STORAGE_KEY) || "";
+  const savedServer = storageGet(STORAGE_SERVER) || "";
+  const savedTarget = storageGet(STORAGE_TARGET) || "microbit";
+  const setupDone = storageGet(STORAGE_SETUP_DONE) === "1";
+
+  /* hydrate setup view */
+  setupMode.value = savedMode;
+  setupProv.value = savedProvider;
+  populateModels(setupModel, savedProvider, savedModel);
+  setupKey.value = savedKey;
+  setupServer.value = savedServer || DEFAULT_SERVER;
+  applySetupMode();
+
+  /* hydrate settings view */
+  setMode.value = savedMode;
+  setProv.value = savedProvider;
+  populateModels(setModel, savedProvider, savedModel);
+  setKey.value = savedKey;
+  setServer.value = savedServer || DEFAULT_SERVER;
+  setTarget.value = savedTarget;
+  applySettingsMode();
+
+  /* show correct initial view */
+  showView(setupDone ? "main" : "setup");
+
+  /* ── setup view events ───────────────────────────────────── */
+  setupMode.onchange = () => {
+    applySetupMode();
   };
-  modelInput.onchange = () => {
-    storageSet(STORAGE_MODEL, modelInput.value.trim());
+
+  setupProv.onchange = () => {
+    populateModels(setupModel, setupProv.value, null);
   };
+
+  setupGo.onclick = () => {
+    const mode = setupMode.value;
+    if (mode === "byok") {
+      const key = setupKey.value.trim();
+      if (!key) {
+        setupKey.style.borderColor = "#ef4444";
+        setupKey.focus();
+        return;
+      }
+      setupKey.style.borderColor = "#29324e";
+      storageSet(STORAGE_PROVIDER, setupProv.value);
+      storageSet(STORAGE_MODEL, setupModel.value);
+      storageSet(STORAGE_KEY, key);
+    } else {
+      const server = setupServer.value.trim() || DEFAULT_SERVER;
+      storageSet(STORAGE_SERVER, server);
+    }
+    storageSet(STORAGE_MODE, mode);
+    storageSet(STORAGE_SETUP_DONE, "1");
+
+    /* sync settings view with what was just saved */
+    setMode.value = mode;
+    setProv.value = setupProv.value;
+    populateModels(setModel, setupProv.value, setupModel.value);
+    setKey.value = setupKey.value;
+    setServer.value = setupServer.value;
+    applySettingsMode();
+
+    showView("main");
+  };
+
+  /* ── settings view events ────────────────────────────────── */
+  setMode.onchange = () => {
+    applySettingsMode();
+  };
+
+  setProv.onchange = () => {
+    populateModels(setModel, setProv.value, null);
+    storageSet(STORAGE_PROVIDER, setProv.value);
+    /* select the default and persist */
+    storageSet(STORAGE_MODEL, setModel.value);
+  };
+
+  setModel.onchange = () => {
+    storageSet(STORAGE_MODEL, setModel.value);
+  };
+
   saveBtn.onclick = () => {
     try {
-      storageSet(STORAGE_KEY, keyInput.value.trim());
+      storageSet(STORAGE_KEY, setKey.value.trim());
       setStatus("Key saved");
       logLine("BYOK API key saved in this browser.");
     } catch (error) {
@@ -255,6 +539,23 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     }
   };
 
+  setServer.onchange = () => {
+    storageSet(STORAGE_SERVER, setServer.value.trim());
+  };
+
+  setTarget.onchange = () => {
+    storageSet(STORAGE_TARGET, setTarget.value);
+  };
+
+  gearBtn.onclick = () => showView("settings");
+  backBtn.onclick = () => showView("main");
+
+  /* ── close buttons ───────────────────────────────────────── */
+  $("#x-setup").onclick = closePanel;
+  $("#x-main").onclick = closePanel;
+  $("#x-settings").onclick = closePanel;
+
+  /* ── Monaco helpers ──────────────────────────────────────── */
   const clickLike = (root, labels) => {
     const list = labels.map((label) => label.toLowerCase());
     const elements = [...root.querySelectorAll("button,[role='tab'],a,[aria-label]")].filter((node) => node && node.offsetParent !== null);
@@ -368,6 +669,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     });
   };
 
+  /* ── code processing ─────────────────────────────────────── */
   const sanitizeMakeCode = (input) => {
     if (!input) return "";
     let text = String(input);
@@ -492,6 +794,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     ].join("\n");
   };
 
+  /* ── provider calls ──────────────────────────────────────── */
   const REQ_TIMEOUT_MS = 60000;
   const EMPTY_RETRIES = 2;
 
@@ -690,7 +993,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   };
 
   const requestBackendGenerate = (payload) => {
-    return fetch(BACKEND + "/bitvibe/generate", {
+    const backendUrl = getBackendUrl();
+    return fetch(backendUrl + "/bitvibe/generate", {
       method: "POST",
       headers: buildBackendHeaders(),
       body: JSON.stringify(payload)
@@ -706,6 +1010,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     });
   };
 
+  /* ── generate handler ────────────────────────────────────── */
   go.onclick = () => {
     if (busy) return;
     busy = true;
@@ -723,8 +1028,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       return;
     }
 
-    const mode = modeSel.value;
-    const target = targetSel.value.trim();
+    const mode = storageGet(STORAGE_MODE) || "byok";
+    const target = storageGet(STORAGE_TARGET) || "microbit";
     const originalText = go.textContent;
     go.textContent = "Loading...";
     go.disabled = true;
@@ -750,14 +1055,10 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
           return requestBackendGenerate({ target, request, currentCode });
         }
 
-        const apiKey = keyInput.value.trim();
-        if (!apiKey) throw new Error("Enter API key for BYOK mode.");
-        const provider = providerSel.value;
-        const model = modelInput.value.trim();
-
-        storageSet(STORAGE_KEY, apiKey);
-        storageSet(STORAGE_PROVIDER, provider);
-        storageSet(STORAGE_MODEL, model);
+        const apiKey = (storageGet(STORAGE_KEY) || "").trim();
+        if (!apiKey) throw new Error("Enter API key for BYOK mode (open Settings).");
+        const provider = storageGet(STORAGE_PROVIDER) || "openai";
+        const model = storageGet(STORAGE_MODEL) || "";
 
         logLine("Mode: BYOK.");
         return askValidated(provider, apiKey, model, sysFor(target), userFor(request, currentCode), target);
@@ -818,13 +1119,14 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       });
   };
 
+  /* ── drag (all headers) ──────────────────────────────────── */
   (function enableDrag() {
     let dragging = false;
     let ox = 0;
     let oy = 0;
     let sx = 0;
     let sy = 0;
-    header.addEventListener("mousedown", (event) => {
+    const onDown = (event) => {
       dragging = true;
       ox = event.clientX;
       oy = event.clientY;
@@ -832,7 +1134,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       sx = rect.left;
       sy = rect.top;
       document.body.style.userSelect = "none";
-    });
+    };
+    headers.forEach((h) => h.addEventListener("mousedown", onDown));
     window.addEventListener("mousemove", (event) => {
       if (!dragging) return;
       const nextX = sx + (event.clientX - ox);
@@ -848,6 +1151,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     });
   })();
 
+  /* ── resize ──────────────────────────────────────────────── */
   (function enableResize() {
     let resizing = false;
     let rx = 0;
@@ -874,6 +1178,4 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       document.body.style.userSelect = "";
     });
   })();
-
-  closeBtn.onclick = closePanel;
 })();
