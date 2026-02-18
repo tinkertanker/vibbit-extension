@@ -9,7 +9,7 @@ This repository ships one school-facing runtime that supports both:
 
 - Runtime script for shipping/testing: `work.js`
 - Extension build output: `dist/`
-- Packaged zip output: `artifacts/bit-vibe-extension.zip`
+- Packaged zip output: `artifacts/vibbit-extension.zip`
 - Managed backend reference: `apps/backend/src/server.mjs`
 
 `client.js` is legacy and not the primary build source.
@@ -25,7 +25,7 @@ Use this exact flow when asked to prepare a testable build:
 3. Verify outputs:
    - `dist/content-script.js`
    - `dist/manifest.json`
-   - `artifacts/bit-vibe-extension.zip`
+   - `artifacts/vibbit-extension.zip`
 4. For local browser testing, load unpacked from `dist/` at `chrome://extensions`.
 
 ## Supported keys and endpoints
@@ -35,7 +35,7 @@ Use this exact flow when asked to prepare a testable build:
 - Optional app token:
   - `APP_TOKEN` (Bearer token to your backend)
 - Endpoint:
-  - `POST {BACKEND}/bitvibe/generate`
+  - `POST {BACKEND}/vibbit/generate`
 
 ### BYOK mode
 
@@ -45,13 +45,13 @@ Use this exact flow when asked to prepare a testable build:
 
 ## Build-time overrides
 
-- `BITVIBE_BACKEND`
-- `BITVIBE_APP_TOKEN`
+- `VIBBIT_BACKEND`
+- `VIBBIT_APP_TOKEN`
 
 Example:
 
 ```bash
-BITVIBE_BACKEND="https://your-server.example" BITVIBE_APP_TOKEN="optional-token" npm run package
+VIBBIT_BACKEND="https://your-server.example" VIBBIT_APP_TOKEN="optional-token" npm run package
 ```
 
 ## Managed backend in-repo

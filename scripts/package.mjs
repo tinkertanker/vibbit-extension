@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, "..");
 const distDir = path.join(root, "dist");
 const outputDir = path.join(root, "artifacts");
-const outputZip = path.join(outputDir, "bit-vibe-extension.zip");
+const outputZip = path.join(outputDir, "vibbit-extension.zip");
 
 async function run() {
   await mkdir(outputDir, { recursive: true });

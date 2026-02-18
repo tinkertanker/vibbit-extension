@@ -1,23 +1,23 @@
 import { createServer } from "node:http";
 
 const PORT = Number(process.env.PORT || 8787);
-const ALLOW_ORIGIN = process.env.BITVIBE_ALLOW_ORIGIN || "*";
-const REQUEST_TIMEOUT_MS = Number(process.env.BITVIBE_REQUEST_TIMEOUT_MS || 60000);
+const ALLOW_ORIGIN = process.env.VIBBIT_ALLOW_ORIGIN || "*";
+const REQUEST_TIMEOUT_MS = Number(process.env.VIBBIT_REQUEST_TIMEOUT_MS || 60000);
 const SERVER_APP_TOKEN = process.env.SERVER_APP_TOKEN || "";
-const PROVIDER = (process.env.BITVIBE_PROVIDER || "openai").trim().toLowerCase();
+const PROVIDER = (process.env.VIBBIT_PROVIDER || "openai").trim().toLowerCase();
 
 function modelFor(provider) {
-  if (provider === "openai") return process.env.BITVIBE_OPENAI_MODEL || process.env.BITVIBE_MODEL || "gpt-4o-mini";
-  if (provider === "gemini") return process.env.BITVIBE_GEMINI_MODEL || process.env.BITVIBE_MODEL || "gemini-2.5-flash";
-  if (provider === "openrouter") return process.env.BITVIBE_OPENROUTER_MODEL || process.env.BITVIBE_MODEL || "openrouter/auto";
-  return process.env.BITVIBE_MODEL || "gpt-4o-mini";
+  if (provider === "openai") return process.env.VIBBIT_OPENAI_MODEL || process.env.VIBBIT_MODEL || "gpt-4o-mini";
+  if (provider === "gemini") return process.env.VIBBIT_GEMINI_MODEL || process.env.VIBBIT_MODEL || "gemini-2.5-flash";
+  if (provider === "openrouter") return process.env.VIBBIT_OPENROUTER_MODEL || process.env.VIBBIT_MODEL || "openrouter/auto";
+  return process.env.VIBBIT_MODEL || "gpt-4o-mini";
 }
 
 function apiKeyFor(provider) {
-  if (provider === "openai") return process.env.BITVIBE_OPENAI_API_KEY || process.env.BITVIBE_API_KEY || "";
-  if (provider === "gemini") return process.env.BITVIBE_GEMINI_API_KEY || process.env.BITVIBE_API_KEY || "";
-  if (provider === "openrouter") return process.env.BITVIBE_OPENROUTER_API_KEY || process.env.BITVIBE_API_KEY || "";
-  return process.env.BITVIBE_API_KEY || "";
+  if (provider === "openai") return process.env.VIBBIT_OPENAI_API_KEY || process.env.VIBBIT_API_KEY || "";
+  if (provider === "gemini") return process.env.VIBBIT_GEMINI_API_KEY || process.env.VIBBIT_API_KEY || "";
+  if (provider === "openrouter") return process.env.VIBBIT_OPENROUTER_API_KEY || process.env.VIBBIT_API_KEY || "";
+  return process.env.VIBBIT_API_KEY || "";
 }
 
 function respondJson(res, status, body, origin = "") {
@@ -271,7 +271,7 @@ async function generateManaged({ target, request, currentCode }) {
   const model = modelFor(provider);
 
   if (!key) {
-    throw new Error(`Missing API key for provider '${provider}'. Set BITVIBE_API_KEY or provider-specific key.`);
+    throw new Error(`Missing API key for provider '${provider}'. Set VIBBIT_API_KEY or provider-specific key.`);
   }
 
   const system = systemPromptFor(target);
@@ -281,7 +281,7 @@ async function generateManaged({ target, request, currentCode }) {
     if (provider === "openai") return callOpenAI(key, model, system, user, signal);
     if (provider === "gemini") return callGemini(key, model, system, user, signal);
     if (provider === "openrouter") return callOpenRouter(key, model, system, user, signal);
-    throw new Error(`Unsupported BITVIBE_PROVIDER '${provider}'`);
+    throw new Error(`Unsupported VIBBIT_PROVIDER '${provider}'`);
   }, REQUEST_TIMEOUT_MS);
 
   const parts = separateFeedback(raw);
@@ -346,7 +346,7 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (pathname === "/bitvibe/generate" && req.method === "POST") {
+  if (pathname === "/vibbit/generate" && req.method === "POST") {
     try {
       if (SERVER_APP_TOKEN) {
         const token = extractBearerToken(req.headers.authorization);
@@ -379,9 +379,9 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`[bit:vibe backend] Listening on http://localhost:${PORT}`);
-  console.log(`[bit:vibe backend] Provider=${PROVIDER} model=${modelFor(PROVIDER)}`);
+  console.log(`[Vibbit backend] Listening on http://localhost:${PORT}`);
+  console.log(`[Vibbit backend] Provider=${PROVIDER} model=${modelFor(PROVIDER)}`);
   if (SERVER_APP_TOKEN) {
-    console.log("[bit:vibe backend] SERVER_APP_TOKEN auth enabled");
+    console.log("[Vibbit backend] SERVER_APP_TOKEN auth enabled");
   }
 });

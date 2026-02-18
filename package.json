@@ -1,8 +1,8 @@
 {
-  "name": "bitvibe-extension",
+  "name": "vibbit-extension",
   "version": "0.1.0",
   "private": true,
-  "description": "Build tooling for the bit:vibe Chrome extension",
+  "description": "Build tooling for the Vibbit Chrome extension",
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:watch": "node --watch scripts/build.mjs",

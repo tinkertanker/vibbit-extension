@@ -1,4 +1,4 @@
-// Background service worker for bit:vibe extension
+// Background service worker for Vibbit extension
 // Handles toolbar icon clicks to show/hide the panel
 
 const MAKECODE_HOSTS = [
@@ -26,13 +26,13 @@ chrome.action.onClicked.addListener(async (tab) => {
   const results = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: () => {
-      const panel = document.getElementById('bitvibe-panel');
-      const fab = document.getElementById('bitvibe-fab');
+      const panel = document.getElementById('vibbit-panel');
+      const fab = document.getElementById('vibbit-fab');
       return {
         fabExists: fab !== null,
         panelExists: panel !== null,
         panelVisible: panel ? panel.style.display !== 'none' : false,
-        guardSet: !!window.__bitvibeStrict
+        guardSet: !!window.__vibbitStrict
       };
     }
   });
@@ -44,8 +44,8 @@ chrome.action.onClicked.addListener(async (tab) => {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        const panel = document.getElementById('bitvibe-panel');
-        const fab = document.getElementById('bitvibe-fab');
+        const panel = document.getElementById('vibbit-panel');
+        const fab = document.getElementById('vibbit-fab');
         if (panel) { panel.style.transform = 'scale(0)'; panel.style.opacity = '0'; panel.style.display = 'none'; }
         if (fab) fab.style.display = 'flex';
       }
@@ -55,8 +55,8 @@ chrome.action.onClicked.addListener(async (tab) => {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        const panel = document.getElementById('bitvibe-panel');
-        const fab = document.getElementById('bitvibe-fab');
+        const panel = document.getElementById('vibbit-panel');
+        const fab = document.getElementById('vibbit-fab');
         if (panel) { panel.style.transform = 'scale(1)'; panel.style.opacity = '1'; panel.style.display = 'flex'; }
         if (fab) fab.style.display = 'none';
       }
@@ -65,7 +65,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     // Guard set but DOM removed – reset and re-inject
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => { window.__bitvibeStrict = 0; }
+      func: () => { window.__vibbitStrict = 0; }
     });
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -75,8 +75,8 @@ chrome.action.onClicked.addListener(async (tab) => {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        const panel = document.getElementById('bitvibe-panel');
-        const fab = document.getElementById('bitvibe-fab');
+        const panel = document.getElementById('vibbit-panel');
+        const fab = document.getElementById('vibbit-fab');
         if (panel) { panel.style.transform = 'scale(1)'; panel.style.opacity = '1'; panel.style.display = 'flex'; }
         if (fab) fab.style.display = 'none';
       }
@@ -91,8 +91,8 @@ chrome.action.onClicked.addListener(async (tab) => {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        const panel = document.getElementById('bitvibe-panel');
-        const fab = document.getElementById('bitvibe-fab');
+        const panel = document.getElementById('vibbit-panel');
+        const fab = document.getElementById('vibbit-fab');
         if (panel) { panel.style.transform = 'scale(1)'; panel.style.opacity = '1'; panel.style.display = 'flex'; }
         if (fab) fab.style.display = 'none';
       }

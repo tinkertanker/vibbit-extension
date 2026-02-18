@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name         bit:vibe (no-overlap console + exclusive states)
-// @namespace    bitvibe.local
+// @name         Vibbit (no-overlap console + exclusive states)
+// @namespace    vibbit.local
 // @version      0.6
 // @description  Console pinned below content; never overlaps buttons. Either launcher or panel (exclusive). Smooth animations + draggable UI.
 // @match        https://makecode.microbit.org/*
@@ -9,20 +9,20 @@
 // @run-at       document-idle
 // ==/UserScript==
 
-const BACKEND = "https://bitvibe.dev.tk.sg";
+const BACKEND = "https://vibbit.dev.tk.sg";
 const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
 (function () {
-  if (window.__bitvibePanelMounted) return;
-  window.__bitvibePanelMounted = true;
-  window.__bitvibeStrict = 1;
+  if (window.__vibbitPanelMounted) return;
+  window.__vibbitPanelMounted = true;
+  window.__vibbitStrict = 1;
 
   const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
   // ---------- Launcher (draggable; won’t open while dragging) ----------
   const launcher = document.createElement('button');
-  launcher.id = 'bitvibe-launcher';
-  launcher.title = 'bit:vibe (Alt+M)';
+  launcher.id = 'vibbit-launcher';
+  launcher.title = 'Vibbit (Alt+M)';
   launcher.style.cssText = `
     position:fixed; right:18px; bottom:18px; z-index:2147483647;
     width:44px; height:44px; border-radius:12px; border:1px solid rgba(125,225,255,.25);
@@ -76,7 +76,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   // ---------- Panel (grid: header / content / console) ----------
   const ui = document.createElement('div');
   ui.setAttribute('role', 'dialog');
-  ui.setAttribute('aria-label', 'bit:vibe Panel');
+  ui.setAttribute('aria-label', 'Vibbit Panel');
   ui.style.cssText = `
     position:fixed; right:16px; bottom:16px; z-index:2147483647;
     width:520px; max-width:calc(100vw - 24px);
@@ -87,7 +87,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   const css = document.createElement('style');
   css.textContent = `
-    .bitvibe-card {
+    .vibbit-card {
       background: linear-gradient(180deg, #0e1428 0%, #0a1020 100%);
       border: 1px solid rgba(89,123,255,.15);
       border-radius: 14px;
@@ -100,75 +100,75 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       grid-template-rows: auto 1fr auto;
       height: 100%;
     }
-    .bitvibe-header { display:flex;align-items:center;gap:10px; padding:12px 14px;
+    .vibbit-header { display:flex;align-items:center;gap:10px; padding:12px 14px;
       background: linear-gradient(180deg, rgba(22,30,58,.7), rgba(16,22,45,.7));
       border-bottom: 1px solid rgba(89,123,255,.15);
       cursor: move; user-select:none; }
-    .bitvibe-logo { width:18px;height:18px;border-radius:6px; background: linear-gradient(135deg,#5b7cff,#7de1ff);
+    .vibbit-logo { width:18px;height:18px;border-radius:6px; background: linear-gradient(135deg,#5b7cff,#7de1ff);
       display:inline-flex;align-items:center;justify-content:center; color:#0b1020;font-weight:900;font-size:12px;
       box-shadow: 0 2px 12px rgba(93,131,255,.45); }
-    .bitvibe-title { font-weight:700;font-size:13px; letter-spacing:.2px }
-    .bitvibe-status { margin-left:auto; font-size:11px; color:#a9b7ff; padding:3px 8px;border-radius:999px;
+    .vibbit-title { font-weight:700;font-size:13px; letter-spacing:.2px }
+    .vibbit-status { margin-left:auto; font-size:11px; color:#a9b7ff; padding:3px 8px;border-radius:999px;
       background:rgba(89,123,255,.12); border:1px solid rgba(89,123,255,.22); white-space:nowrap; }
-    .bitvibe-close { margin-left:8px;background:transparent;border:none;color:#b8c2ff; font-size:16px;line-height:1;cursor:pointer;border-radius:8px;padding:4px 6px; }
-    .bitvibe-close:hover { background:rgba(255,255,255,.06); color:#fff }
-    .bitvibe-body {
+    .vibbit-close { margin-left:8px;background:transparent;border:none;color:#b8c2ff; font-size:16px;line-height:1;cursor:pointer;border-radius:8px;padding:4px 6px; }
+    .vibbit-close:hover { background:rgba(255,255,255,.06); color:#fff }
+    .vibbit-body {
       padding:12px 14px;
       display:grid; gap:10px; overflow:auto;
       background: transparent;
     }
-    .bitvibe-section { display:grid; gap:8px; padding:10px; border:1px solid rgba(120,148,255,.15); border-radius:12px;
+    .vibbit-section { display:grid; gap:8px; padding:10px; border:1px solid rgba(120,148,255,.15); border-radius:12px;
       background: linear-gradient(180deg, rgba(18,24,48,.65), rgba(12,18,36,.65)); }
-    .bitvibe-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .bitvibe-label { font-size:11px;color:#9eb2ff; text-transform:uppercase; letter-spacing:.08em }
-    .bitvibe-select, .bitvibe-textarea, .bitvibe-btn {
+    .vibbit-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .vibbit-label { font-size:11px;color:#9eb2ff; text-transform:uppercase; letter-spacing:.08em }
+    .vibbit-select, .vibbit-textarea, .vibbit-btn {
       border-radius:10px; border:1px solid rgba(120,148,255,.2); background:#0b1020; color:#e6eaf7;
       padding:10px 12px; font:13px/1.35 inherit; outline:none; transition: border-color .15s, box-shadow .15s, background-color .15s, transform .06s; }
-    .bitvibe-select:hover, .bitvibe-textarea:hover { border-color: rgba(125,225,255,.35); }
-    .bitvibe-select:focus, .bitvibe-textarea:focus { border-color:#7de1ff; box-shadow:0 0 0 3px rgba(125,225,255,.15); }
-    .bitvibe-select { flex:1; min-width:220px; }
-    .bitvibe-textarea { resize:vertical; min-height:84px; width:100%; }
-    .bitvibe-btn { cursor:pointer; user-select:none; font-weight:700; letter-spacing:.2px;
+    .vibbit-select:hover, .vibbit-textarea:hover { border-color: rgba(125,225,255,.35); }
+    .vibbit-select:focus, .vibbit-textarea:focus { border-color:#7de1ff; box-shadow:0 0 0 3px rgba(125,225,255,.15); }
+    .vibbit-select { flex:1; min-width:220px; }
+    .vibbit-textarea { resize:vertical; min-height:84px; width:100%; }
+    .vibbit-btn { cursor:pointer; user-select:none; font-weight:700; letter-spacing:.2px;
       background: linear-gradient(180deg,#3e7bff,#2d67ff); border-color: rgba(89,123,255,.35); color:#fff; box-shadow: 0 6px 18px rgba(46,102,255,.35); }
-    .bitvibe-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(46,102,255,.45); }
-    .bitvibe-btn:active { transform: translateY(0); box-shadow: 0 6px 18px rgba(46,102,255,.35); }
-    .bitvibe-checkbox { display:flex; align-items:center; gap:8px; color:#cfe3ff; font-size:12px; }
+    .vibbit-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(46,102,255,.45); }
+    .vibbit-btn:active { transform: translateY(0); box-shadow: 0 6px 18px rgba(46,102,255,.35); }
+    .vibbit-checkbox { display:flex; align-items:center; gap:8px; color:#cfe3ff; font-size:12px; }
 
     /* Feedback sits within content flow above console */
-    .bitvibe-feedback { display:none; margin:0 14px; }
-    .bitvibe-feedback-inner { padding:12px; border:1px solid rgba(120,148,255,.25); border-radius:12px; background: linear-gradient(180deg,#131b38,#0f1832); box-shadow: inset 0 1px 0 rgba(255,255,255,.03); }
-    .bitvibe-fb-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:8px; }
-    .bitvibe-fb-title { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#8fb7ff; display:flex; gap:8px; align-items:center; }
-    .bitvibe-pill { width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%; background:#3b82f6; color:#0b1020; font-weight:800; font-size:11px; }
-    .bitvibe-fb-toggle { background:rgba(148,163,255,.12); color:#d7e1ff; border:1px solid rgba(148,163,255,.32); border-radius:999px; padding:4px 10px; font-size:11px; cursor:pointer; }
-    .bitvibe-fb-lines { display:grid; gap:6px; }
-    .bitvibe-fb-bubble { padding:8px 10px; border-left:3px solid #3b82f6; border-radius:8px; background:rgba(59,130,246,.16); color:#f1f6ff; }
+    .vibbit-feedback { display:none; margin:0 14px; }
+    .vibbit-feedback-inner { padding:12px; border:1px solid rgba(120,148,255,.25); border-radius:12px; background: linear-gradient(180deg,#131b38,#0f1832); box-shadow: inset 0 1px 0 rgba(255,255,255,.03); }
+    .vibbit-fb-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:8px; }
+    .vibbit-fb-title { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#8fb7ff; display:flex; gap:8px; align-items:center; }
+    .vibbit-pill { width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%; background:#3b82f6; color:#0b1020; font-weight:800; font-size:11px; }
+    .vibbit-fb-toggle { background:rgba(148,163,255,.12); color:#d7e1ff; border:1px solid rgba(148,163,255,.32); border-radius:999px; padding:4px 10px; font-size:11px; cursor:pointer; }
+    .vibbit-fb-lines { display:grid; gap:6px; }
+    .vibbit-fb-bubble { padding:8px 10px; border-left:3px solid #3b82f6; border-radius:8px; background:rgba(59,130,246,.16); color:#f1f6ff; }
 
     /* Console is a dedicated bottom row (no overlap) */
-    .bitvibe-console {
+    .vibbit-console {
       display:grid; grid-template-rows: auto 1fr;
       border-top:1px solid rgba(120,148,255,.18);
       background:#0c1230;
     }
-    .bitvibe-console-head {
+    .vibbit-console-head {
       display:flex; align-items:center; justify-content:space-between;
       padding:8px 12px; color:#a9b7ff; font-weight:600;
     }
-    .bitvibe-console-toggle {
+    .vibbit-console-toggle {
       background:rgba(148,163,255,.12); color:#d7e1ff; border:1px solid rgba(148,163,255,.32);
       border-radius:999px; padding:4px 10px; font-size:11px; cursor:pointer;
     }
-    .bitvibe-log {
+    .vibbit-log {
       margin:0 12px 12px; height:120px;
       padding:10px 12px; font:12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Roboto Mono", monospace;
       color:#a9b7ff; background:#0b1026; border:1px solid rgba(120,148,255,.18); border-radius:10px; overflow:auto; scrollbar-width: thin;
     }
 
     /* Panel show animation */
-    .bitvibe-show { display:block !important; transform: scale(1) !important; opacity: 1 !important; }
+    .vibbit-show { display:block !important; transform: scale(1) !important; opacity: 1 !important; }
 
     /* Corner resizer */
-    .bitvibe-resize {
+    .vibbit-resize {
       position:absolute; width:16px; height:16px; right:8px; bottom:8px; cursor:nwse-resize; opacity:.9; z-index:3;
       background: linear-gradient(135deg,transparent 52%, rgba(125,225,255,.35) 52% 60%, transparent 0) no-repeat,
                   linear-gradient(135deg,transparent 62%, rgba(125,225,255,.25) 62% 70%, transparent 0) no-repeat,
@@ -178,74 +178,74 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   `;
 
   const card = document.createElement('div');
-  card.className = 'bitvibe-card';
+  card.className = 'vibbit-card';
 
   // Header
   const header = document.createElement('div');
-  header.className = 'bitvibe-header';
+  header.className = 'vibbit-header';
   header.innerHTML = `
-    <div class="bitvibe-logo">M</div>
-    <div class="bitvibe-title">bit:vibe</div>
-    <span id="status" class="bitvibe-status">Idle</span>
-    <button id="bitvibe-close" class="bitvibe-close" title="Hide panel">✕</button>
+    <div class="vibbit-logo">M</div>
+    <div class="vibbit-title">Vibbit</div>
+    <span id="status" class="vibbit-status">Idle</span>
+    <button id="vibbit-close" class="vibbit-close" title="Hide panel">✕</button>
   `;
 
   // Body (content area)
   const body = document.createElement('div');
-  body.className = 'bitvibe-body';
+  body.className = 'vibbit-body';
   body.innerHTML = `
-    <div class="bitvibe-section">
-      <div class="bitvibe-label">Engine</div>
-      <div class="bitvibe-row">
-        <select id="engine" class="bitvibe-select"><option>Loading…</option></select>
+    <div class="vibbit-section">
+      <div class="vibbit-label">Engine</div>
+      <div class="vibbit-row">
+        <select id="engine" class="vibbit-select"><option>Loading…</option></select>
       </div>
     </div>
 
-    <div class="bitvibe-section">
-      <div class="bitvibe-label">Target & Context</div>
-      <div class="bitvibe-row">
-        <select id="target" class="bitvibe-select">
+    <div class="vibbit-section">
+      <div class="vibbit-label">Target & Context</div>
+      <div class="vibbit-row">
+        <select id="target" class="vibbit-select">
           <option value="microbit">micro:bit</option>
           <option value="arcade">Arcade</option>
           <option value="maker">Maker</option>
         </select>
-        <label class="bitvibe-checkbox"><input id="inc" type="checkbox" checked>Use current code</label>
+        <label class="vibbit-checkbox"><input id="inc" type="checkbox" checked>Use current code</label>
       </div>
     </div>
 
-    <div class="bitvibe-section">
-      <div class="bitvibe-label">Prompt</div>
-      <textarea id="p" class="bitvibe-textarea" rows="4" placeholder="Describe what you want the block code to do — be specific"></textarea>
-      <div class="bitvibe-row">
-        <button id="go" class="bitvibe-btn" style="flex:1">Generate & Paste</button>
-        <button id="revert" class="bitvibe-btn" style="flex:1; background:#1b2746; border-color:rgba(120,148,255,.25)">Revert</button>
+    <div class="vibbit-section">
+      <div class="vibbit-label">Prompt</div>
+      <textarea id="p" class="vibbit-textarea" rows="4" placeholder="Describe what you want the block code to do — be specific"></textarea>
+      <div class="vibbit-row">
+        <button id="go" class="vibbit-btn" style="flex:1">Generate & Paste</button>
+        <button id="revert" class="vibbit-btn" style="flex:1; background:#1b2746; border-color:rgba(120,148,255,.25)">Revert</button>
       </div>
     </div>
 
-    <div class="bitvibe-feedback" id="fb">
-      <div class="bitvibe-feedback-inner">
-        <div class="bitvibe-fb-head">
-          <div class="bitvibe-fb-title"><span class="bitvibe-pill">i</span> Model Feedback</div>
-          <button id="fbToggle" class="bitvibe-fb-toggle" aria-expanded="true">Hide</button>
+    <div class="vibbit-feedback" id="fb">
+      <div class="vibbit-feedback-inner">
+        <div class="vibbit-fb-head">
+          <div class="vibbit-fb-title"><span class="vibbit-pill">i</span> Model Feedback</div>
+          <button id="fbToggle" class="vibbit-fb-toggle" aria-expanded="true">Hide</button>
         </div>
-        <div id="fbLines" class="bitvibe-fb-lines"></div>
+        <div id="fbLines" class="vibbit-fb-lines"></div>
       </div>
     </div>
   `;
 
   // Console row (never overlaps)
   const consoleWrap = document.createElement('div');
-  consoleWrap.className = 'bitvibe-console';
+  consoleWrap.className = 'vibbit-console';
   consoleWrap.innerHTML = `
-    <div class="bitvibe-console-head">
+    <div class="vibbit-console-head">
       <div>Console</div>
-      <button id="consoleToggle" class="bitvibe-console-toggle">Collapse</button>
+      <button id="consoleToggle" class="vibbit-console-toggle">Collapse</button>
     </div>
-    <div id="log" class="bitvibe-log"></div>
+    <div id="log" class="vibbit-log"></div>
   `;
 
   // Resizer
-  const rz = document.createElement('div'); rz.id = 'rz'; rz.className = 'bitvibe-resize';
+  const rz = document.createElement('div'); rz.id = 'rz'; rz.className = 'vibbit-resize';
 
   // Assemble
   ui.appendChild(css);
@@ -259,15 +259,15 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   // Exclusive states: only launcher OR panel visible
   function showPanel() {
     ui.style.display = 'block';
-    requestAnimationFrame(() => ui.classList.add('bitvibe-show'));
+    requestAnimationFrame(() => ui.classList.add('vibbit-show'));
     launcher.style.display = 'none';
   }
   function hidePanel() {
-    ui.classList.remove('bitvibe-show');
+    ui.classList.remove('vibbit-show');
     setTimeout(() => { ui.style.display = 'none'; launcher.style.display = 'flex'; }, 180);
   }
   function togglePanel() {
-    if (ui.style.display === 'none' || !ui.classList.contains('bitvibe-show')) showPanel();
+    if (ui.style.display === 'none' || !ui.classList.contains('vibbit-show')) showPanel();
     else hidePanel();
   }
 
@@ -282,7 +282,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   // ---------- Refs ----------
   const $ = (s) => ui.querySelector(s);
   const statusEl = $('#status');
-  const closeBtn = $('#bitvibe-close');
+  const closeBtn = $('#vibbit-close');
   const resizer = $('#rz');
   const engine = $('#engine');
   const tgtSel = $('#target');
@@ -361,7 +361,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       feedbackCollapsed = false; feedbackBox.style.display = 'none'; feedbackToggle.style.visibility = 'hidden'; return;
     }
     list.forEach(msg => {
-      const b = document.createElement('div'); b.className = 'bitvibe-fb-bubble'; b.textContent = String(msg).trim(); feedbackLines.appendChild(b);
+      const b = document.createElement('div'); b.className = 'vibbit-fb-bubble'; b.textContent = String(msg).trim(); feedbackLines.appendChild(b);
     });
     feedbackToggle.style.visibility = 'visible'; feedbackBox.style.display = 'block'; feedbackCollapsed = false; applyFeedbackCollapse();
   }
@@ -469,7 +469,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   }
   function fetchConfig() {
     const headers = APP_TOKEN ? { "Authorization": "Bearer " + APP_TOKEN } : {};
-    return requestManaged("/bitvibe/config", { headers })
+    return requestManaged("/vibbit/config", { headers })
       .then(r => r.json())
       .then(cfg => { applyEngineOptions(cfg); })
       .catch(e => { logLine("Config load failed: " + (e && e.message ? e.message : e)); });
@@ -480,7 +480,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   function setActiveEngine(preset) {
     const headers = { "Content-Type": "application/json" };
     if (APP_TOKEN) headers["Authorization"] = "Bearer " + APP_TOKEN;
-    return requestManaged("/bitvibe/config", {
+    return requestManaged("/vibbit/config", {
       method: "POST", headers, body: JSON.stringify({ preset })
     }).then(r => {
       if (!r.ok) return r.json().then(j => { throw new Error(j && j.error || ('HTTP ' + r.status)); });
@@ -534,7 +534,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     curP.then(cur => {
       const headers = { "Content-Type": "application/json" };
       if (APP_TOKEN) headers["Authorization"] = "Bearer " + APP_TOKEN;
-      return requestManaged("/bitvibe/generate", {
+      return requestManaged("/vibbit/generate", {
         method: "POST", headers, body: JSON.stringify({ target: t, request: req, currentCode: cur })
       }).then(r => {
         if (!r.ok) return r.json().then(j => { throw new Error(j && j.error || ('HTTP ' + r.status)); });

@@ -201,15 +201,15 @@ if (!hasManaged && !hasByok) {
 
 const buildEnv = { ...process.env };
 if (hasManaged) {
-  buildEnv.BITVIBE_BACKEND = managedBackend;
-  buildEnv.BITVIBE_APP_TOKEN = managedToken;
+  buildEnv.VIBBIT_BACKEND = managedBackend;
+  buildEnv.VIBBIT_APP_TOKEN = managedToken;
 }
 
 await runCommand("npm", ["run", "build"], { cwd: repoRoot, env: buildEnv });
 await runCommand("npm", ["run", "package"], { cwd: repoRoot, env: buildEnv });
 await assertFileExists(path.join(repoRoot, "dist", "content-script.js"));
 await assertFileExists(path.join(repoRoot, "dist", "manifest.json"));
-await assertFileExists(path.join(repoRoot, "artifacts", "bit-vibe-extension.zip"));
+await assertFileExists(path.join(repoRoot, "artifacts", "vibbit-extension.zip"));
 pushCheck("Build + package (live)", "PASS", "Build/package succeeded with live audit environment overrides.");
 
 let runtimeSource = await readFile(path.join(repoRoot, "work.js"), "utf8");
@@ -225,8 +225,8 @@ try {
   await ensureAuditRuntime(page, runtimeSource);
 
   if (hasManaged) {
-    // Mirror runtime construction exactly: BACKEND + "/bitvibe/generate"
-    const managedTarget = managedBackend + "/bitvibe/generate";
+    // Mirror runtime construction exactly: BACKEND + "/vibbit/generate"
+    const managedTarget = managedBackend + "/vibbit/generate";
     const managedProxyCounter = { count: 0 };
     const managedProxyHandler = createProxyHandler(managedProxyCounter);
     const managedPattern = new RegExp(`^${managedTarget.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);

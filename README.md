@@ -1,8 +1,8 @@
-# bit:vibe for micro:bit
+# Vibbit for micro:bit
 
-This repository provides the `bit:vibe` panel for MakeCode micro:bit and supports both deployment models in one version:
+This repository provides the `Vibbit` panel for MakeCode micro:bit and supports both deployment models in one version:
 
-- `Managed` mode: you use a hosted backend (`/bitvibe/generate`)
+- `Managed` mode: you use a hosted backend (`/vibbit/generate`)
 - `BYOK` mode: you enter your own provider/model/key in the panel
 
 ## Supported keys and endpoints
@@ -11,7 +11,7 @@ This repository provides the `bit:vibe` panel for MakeCode micro:bit and support
 
 - Optional app token: `APP_TOKEN` (sent as `Authorization: Bearer <token>`)
 - Endpoint used by the client:
-  - `POST {BACKEND}/bitvibe/generate`
+  - `POST {BACKEND}/vibbit/generate`
 - Request payload:
   - `target`: `microbit | arcade | maker`
   - `request`: natural-language prompt
@@ -37,15 +37,15 @@ This repository provides the `bit:vibe` panel for MakeCode micro:bit and support
 - `client.js`: earlier userscript variant kept in repo
 - `extension/manifest.json`: Chrome extension manifest template
 - `scripts/build.mjs`: builds `dist/` extension files from `work.js`
-- `scripts/package.mjs`: zips `dist/` into `artifacts/bit-vibe-extension.zip`
-- `apps/backend/`: reference managed backend (`/bitvibe/generate`) for self-hosting
+- `scripts/package.mjs`: zips `dist/` into `artifacts/vibbit-extension.zip`
+- `apps/backend/`: reference managed backend (`/vibbit/generate`) for self-hosting
 
 ## Runtime modes
 
 ### Managed mode
 
 - Uses `BACKEND` + optional `APP_TOKEN`
-- Sends `target`, `request`, and optional `currentCode` to `/bitvibe/generate`
+- Sends `target`, `request`, and optional `currentCode` to `/vibbit/generate`
 - Best for centrally managed roll-outs
 
 ### BYOK mode
@@ -60,7 +60,7 @@ This repository provides the `bit:vibe` panel for MakeCode micro:bit and support
 In `work.js`:
 
 ```js
-const BACKEND = "https://bitvibe.dev.tk.sg";
+const BACKEND = "https://vibbit.dev.tk.sg";
 const APP_TOKEN = "";
 ```
 
@@ -80,7 +80,7 @@ Outputs:
 Optional build-time backend overrides:
 
 ```bash
-BITVIBE_BACKEND="https://your-server.example" BITVIBE_APP_TOKEN="optional-token" npm run build
+VIBBIT_BACKEND="https://your-server.example" VIBBIT_APP_TOKEN="optional-token" npm run build
 ```
 
 ## Run managed backend (included)
@@ -102,13 +102,13 @@ By default it runs at:
 To point the extension at your local backend:
 
 ```bash
-BITVIBE_BACKEND="http://localhost:8787" npm run build
+VIBBIT_BACKEND="http://localhost:8787" npm run build
 ```
 
 Managed endpoint contract:
 
 - `GET /healthz`
-- `POST /bitvibe/generate`
+- `POST /vibbit/generate`
 
 ## Package extension zip
 
@@ -118,7 +118,7 @@ npm run package
 
 This builds first, then creates:
 
-- `artifacts/bit-vibe-extension.zip`
+- `artifacts/vibbit-extension.zip`
 
 ## Install in Chrome
 
@@ -135,7 +135,7 @@ This builds first, then creates:
 2. Confirm artefacts exist:
    - `dist/content-script.js`
    - `dist/manifest.json`
-   - `artifacts/bit-vibe-extension.zip`
+   - `artifacts/vibbit-extension.zip`
 3. Load unpacked extension from `dist/` in Chrome.
 4. Open one MakeCode editor page, for example:
    - `https://makecode.microbit.org/`
@@ -147,7 +147,7 @@ This builds first, then creates:
    - switch to `Bring your own key`
    - select provider + model, enter key
    - confirm generation and paste both work
-7. If updating config values (`BITVIBE_BACKEND` or `BITVIBE_APP_TOKEN`), rebuild and reload the extension.
+7. If updating config values (`VIBBIT_BACKEND` or `VIBBIT_APP_TOKEN`), rebuild and reload the extension.
 
 ## Playwright audits
 

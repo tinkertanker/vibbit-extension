@@ -1,19 +1,19 @@
-const BACKEND = "https://bitvibe.dev.tk.sg";
+const BACKEND = "https://vibbit.dev.tk.sg";
 const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
 (function () {
-  if (window.__bitvibeStrict) return;
-  window.__bitvibeStrict = 1;
+  if (window.__vibbitStrict) return;
+  window.__vibbitStrict = 1;
 
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const STORAGE_MODE = "__bitvibe_mode";
-  const STORAGE_KEY = "__bitvibe_key";
-  const STORAGE_PROVIDER = "__bitvibe_provider";
-  const STORAGE_MODEL = "__bitvibe_model";
-  const STORAGE_SETUP_DONE = "__bitvibe_setup_done";
-  const STORAGE_SERVER = "__bitvibe_server";
-  const STORAGE_TARGET = "__bitvibe_target";
+  const STORAGE_MODE = "__vibbit_mode";
+  const STORAGE_KEY = "__vibbit_key";
+  const STORAGE_PROVIDER = "__vibbit_provider";
+  const STORAGE_MODEL = "__vibbit_model";
+  const STORAGE_SETUP_DONE = "__vibbit_setup_done";
+  const STORAGE_SERVER = "__vibbit_server";
+  const STORAGE_TARGET = "__vibbit_target";
 
   const MODEL_PRESETS = {
     openai: [
@@ -61,7 +61,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   /* ── panel container ─────────────────────────────────────── */
   const ui = document.createElement("div");
-  ui.id = "bitvibe-panel";
+  ui.id = "vibbit-panel";
   ui.style.cssText = "position:fixed;right:12px;bottom:12px;width:460px;max-height:84vh;overflow:auto;background:#0b1020;color:#e6e8ef;font-family:system-ui,Segoe UI,Arial,sans-serif;border:1px solid #21304f;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:none;flex-direction:column;z-index:2147483647;transform-origin:bottom right;transition:transform .2s ease,opacity .2s ease";
 
   /* ── build HTML ──────────────────────────────────────────── */
@@ -71,13 +71,13 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
     /* header */
     + '<div id="h-setup" style="cursor:move;display:flex;align-items:center;padding:10px 12px;background:#111936;border-bottom:1px solid #21304f">'
-    + '  <span style="font-weight:600;font-size:13px">bit:vibe</span>'
+    + '  <span style="font-weight:600;font-size:13px">Vibbit</span>'
     + '  <button id="x-setup" aria-label="Close" style="margin-left:auto;' + S_ICON_BTN + '">' + CLOSE_SVG + '</button>'
     + '</div>'
 
     /* body */
     + '<div style="padding:16px 14px;display:grid;gap:12px">'
-    + '  <div style="font-size:15px;font-weight:600;color:#e6e8ef">Welcome to bit:vibe</div>'
+    + '  <div style="font-size:15px;font-weight:600;color:#e6e8ef">Welcome to Vibbit</div>'
 
     /* mode */
     + '  <div style="display:grid;gap:4px">'
@@ -114,7 +114,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     + '  <div id="setup-managed-server" style="display:none">'
     + '    <div style="display:grid;gap:4px">'
     + '      <div style="' + S_LABEL + '">Server URL</div>'
-    + '      <input id="setup-server" placeholder="bitvibe.tk.sg" style="' + S_INPUT + '">'
+    + '      <input id="setup-server" placeholder="vibbit.tk.sg" style="' + S_INPUT + '">'
     + '    </div>'
     + '  </div>'
 
@@ -128,7 +128,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
     /* header */
     + '<div id="h-main" style="cursor:move;display:flex;align-items:center;padding:10px 12px;background:#111936;border-bottom:1px solid #21304f">'
-    + '  <span style="font-weight:600;font-size:13px">bit:vibe</span>'
+    + '  <span style="font-weight:600;font-size:13px">Vibbit</span>'
     + '  <span id="status" style="margin-left:10px;font-size:11px;color:#9bb1dd">Idle</span>'
     + '  <button id="gear" aria-label="Settings" style="margin-left:auto;' + S_ICON_BTN + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.5.7l.3 1.7a5.4 5.4 0 011.5.6l1.4-1 1.6 1.6-1 1.4c.3.5.5 1 .6 1.5l1.7.3v2.2l-1.7.3a5.4 5.4 0 01-.6 1.5l1 1.4-1.6 1.6-1.4-1a5.4 5.4 0 01-1.5.6l-.3 1.7H4.3l-.3-1.7a5.4 5.4 0 01-1.5-.6l-1.4 1L-.5 11l1-1.4A5.4 5.4 0 01-.1 8.1l-1.7-.3V5.6l1.7-.3c.1-.5.3-1 .6-1.5l-1-1.4L1.1.8l1.4 1c.5-.3 1-.5 1.5-.6L4.3.5h2.2zM5.4 4.8a2.6 2.6 0 100 5.2 2.6 2.6 0 000-5.2z"/></svg></button>'
     + '  <button id="x-main" aria-label="Close" style="margin-left:6px;' + S_ICON_BTN + '">' + CLOSE_SVG + '</button>'
@@ -211,7 +211,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     + '  <div id="set-managed-server" style="display:none">'
     + '    <div style="display:grid;gap:4px">'
     + '      <div style="' + S_LABEL + '">Server URL</div>'
-    + '      <input id="set-server" placeholder="bitvibe.tk.sg" style="' + S_INPUT + '">'
+    + '      <input id="set-server" placeholder="vibbit.tk.sg" style="' + S_INPUT + '">'
     + '    </div>'
     + '  </div>'
 
@@ -238,8 +238,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   /* ── FAB ─────────────────────────────────────────────────── */
   const fab = document.createElement("div");
-  fab.id = "bitvibe-fab";
-  fab.title = "bit:vibe \u2013 AI code generator";
+  fab.id = "vibbit-fab";
+  fab.title = "Vibbit \u2013 AI code generator";
   fab.style.cssText = "position:fixed;right:20px;bottom:68px;width:44px;height:44px;border-radius:5px;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(59,130,246,.45);z-index:2147483647;transition:transform .15s ease,box-shadow .15s ease;border:none;";
   fab.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none">'
     + '<path d="M9.5 2L10.7 6.5 15 8l-4.3 1.5L9.5 14l-1.2-4.5L4 8l4.3-1.5L9.5 2z" fill="#fff"/>'
@@ -994,7 +994,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   const requestBackendGenerate = (payload) => {
     const backendUrl = getBackendUrl();
-    return fetch(backendUrl + "/bitvibe/generate", {
+    return fetch(backendUrl + "/vibbit/generate", {
       method: "POST",
       headers: buildBackendHeaders(),
       body: JSON.stringify(payload)

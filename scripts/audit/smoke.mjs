@@ -34,7 +34,7 @@ async function runBuildAndPackage() {
   await runCommand("npm", ["run", "package"], { cwd: repoRoot });
   await assertFileExists(path.join(repoRoot, "dist", "content-script.js"));
   await assertFileExists(path.join(repoRoot, "dist", "manifest.json"));
-  await assertFileExists(path.join(repoRoot, "artifacts", "bit-vibe-extension.zip"));
+  await assertFileExists(path.join(repoRoot, "artifacts", "vibbit-extension.zip"));
   pushCheck("Build + package", true, "`npm run build` and `npm run package` succeeded; expected artefacts exist.");
 }
 

@@ -1,8 +1,8 @@
 {
-  "name": "bitvibe-managed-backend",
+  "name": "vibbit-managed-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Reference managed backend for bit:vibe",
+  "description": "Reference managed backend for Vibbit",
   "type": "module",
   "scripts": {
     "start": "node src/server.mjs",

@@ -1,15 +1,15 @@
-# bit:vibe managed backend
+# Vibbit managed backend
 
 Reference backend for managed mode.
 
 ## Endpoints
 
 - `GET /healthz`
-- `POST /bitvibe/generate`
+- `POST /vibbit/generate`
 
 ## Request/response contract
 
-### `POST /bitvibe/generate` request body
+### `POST /vibbit/generate` request body
 
 ```json
 {
@@ -41,7 +41,7 @@ Reference backend for managed mode.
 ```bash
 cd apps/backend
 cp .env.example .env
-# set BITVIBE_PROVIDER and a matching API key
+# set VIBBIT_PROVIDER and a matching API key
 npm start
 ```
 
@@ -53,13 +53,13 @@ Server defaults:
 ## Environment variables
 
 - `PORT` (default `8787`)
-- `BITVIBE_ALLOW_ORIGIN` (default `*`)
-- `BITVIBE_REQUEST_TIMEOUT_MS` (default `60000`)
+- `VIBBIT_ALLOW_ORIGIN` (default `*`)
+- `VIBBIT_REQUEST_TIMEOUT_MS` (default `60000`)
 - `SERVER_APP_TOKEN` (optional bearer token)
-- `BITVIBE_PROVIDER` (`openai` | `gemini` | `openrouter`)
-- `BITVIBE_MODEL` fallback model
-- `BITVIBE_API_KEY` fallback key
+- `VIBBIT_PROVIDER` (`openai` | `gemini` | `openrouter`)
+- `VIBBIT_MODEL` fallback model
+- `VIBBIT_API_KEY` fallback key
 - Provider-specific overrides:
-  - `BITVIBE_OPENAI_API_KEY`, `BITVIBE_OPENAI_MODEL`
-  - `BITVIBE_GEMINI_API_KEY`, `BITVIBE_GEMINI_MODEL`
-  - `BITVIBE_OPENROUTER_API_KEY`, `BITVIBE_OPENROUTER_MODEL`
+  - `VIBBIT_OPENAI_API_KEY`, `VIBBIT_OPENAI_MODEL`
+  - `VIBBIT_GEMINI_API_KEY`, `VIBBIT_GEMINI_MODEL`
+  - `VIBBIT_OPENROUTER_API_KEY`, `VIBBIT_OPENROUTER_MODEL`
