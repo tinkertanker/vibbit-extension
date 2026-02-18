@@ -348,20 +348,30 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   };
 
   /* ── mode-dependent field visibility ─────────────────────── */
+  const setModeVisibility = (mode, refs) => {
+    const isByok = mode === "byok";
+    refs.byokProvider.style.display = isByok ? "grid" : "none";
+    refs.byokModel.style.display = isByok ? "grid" : "none";
+    refs.byokKey.style.display = isByok ? "grid" : "none";
+    refs.managedServer.style.display = isByok ? "none" : "grid";
+  };
+
   const applySetupMode = () => {
-    const isByok = setupMode.value === "byok";
-    setupByokProvider.style.display = isByok ? "grid" : "none";
-    setupByokModel.style.display = isByok ? "grid" : "none";
-    setupByokKey.style.display = isByok ? "grid" : "none";
-    setupManagedServer.style.display = isByok ? "none" : "grid";
+    setModeVisibility(setupMode.value, {
+      byokProvider: setupByokProvider,
+      byokModel: setupByokModel,
+      byokKey: setupByokKey,
+      managedServer: setupManagedServer
+    });
   };
 
   const applySettingsMode = () => {
-    const isByok = setMode.value === "byok";
-    setByokProvider.style.display = isByok ? "grid" : "none";
-    setByokModel.style.display = isByok ? "grid" : "none";
-    setByokKey.style.display = isByok ? "grid" : "none";
-    setManagedServer.style.display = isByok ? "none" : "grid";
+    setModeVisibility(setMode.value, {
+      byokProvider: setByokProvider,
+      byokModel: setByokModel,
+      byokKey: setByokKey,
+      managedServer: setManagedServer
+    });
     storageSet(STORAGE_MODE, setMode.value);
   };
 
