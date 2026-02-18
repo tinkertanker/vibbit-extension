@@ -6,3 +6,7 @@ output/playwright/
 .env.audit
 .env.audit.local
 apps/backend/.env
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
