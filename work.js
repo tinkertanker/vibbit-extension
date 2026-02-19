@@ -726,7 +726,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       { re: /\bnew\s+[A-Z_a-z]/g, why: "new constructor" },
       { re: /\bPromise\b|\basync\b|\bawait\b/g, why: "promises/async" },
       { re: /\bimport\s|\bexport\s/g, why: "import/export" },
-      { re: /`/g, why: "template strings" },
+      { re: /\$\{[^}]+\}/g, why: "template string interpolation" },
       { re: /\.\s*(map|forEach|filter|reduce|find|some|every)\s*\(/g, why: "higher-order array methods" },
       { re: /\bnamespace\b|\bmodule\b/g, why: "namespaces/modules" },
       { re: /\benum\b|\binterface\b|\btype\s+[A-Z_a-z]/g, why: "TS types/enums" },
@@ -734,8 +734,19 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       { re: /setTimeout\s*\(|setInterval\s*\(/g, why: "timers" },
       { re: /console\./g, why: "console calls" },
       { re: /^\s*\/\//m, why: "line comments" },
-      { re: /\/\*[\s\S]*?\*\//g, why: "block comments" }
+      { re: /\/\*[\s\S]*?\*\//g, why: "block comments" },
+      { re: /\bnull\b/g, why: "null" },
+      { re: /\bundefined\b/g, why: "undefined" },
+      { re: /\bas\s+[A-Z_a-z][A-Z_a-z0-9_.]*/g, why: "casts" },
+      { re: /(\*=|\/=|%=|\|=|&=|\^=|<<=|>>=|>>>=)/g, why: "unsupported assignment operators" }
     ];
+    const bitwiseRules = [
+      /<<|>>>|>>/,
+      /\^/,
+      /(^|[^|])\|([^|=]|$)/m,
+      /(^|[^&])&([^&=]|$)/m
+    ];
+    const eventRegistrationRe = /\b(?:basic\.forever|loops\.forever|input\.on[A-Z_a-z0-9_]*|radio\.on[A-Z_a-z0-9_]*|pins\.on[A-Z_a-z0-9_]*|controller\.[A-Z_a-z0-9_]*\.onEvent|controller\.on[A-Z_a-z0-9_]*|sprites\.on[A-Z_a-z0-9_]*|scene\.on[A-Z_a-z0-9_]*|game\.on[A-Z_a-z0-9_]*|info\.on[A-Z_a-z0-9_]*|control\.inBackground)\s*\(/;
 
     if ((target === "microbit" || target === "maker") && /sprites\.|controller\.|scene\.|game\.onUpdate/i.test(code)) {
       return { ok: false, violations: ["Arcade APIs in micro:bit/Maker"] };
@@ -747,6 +758,56 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     const violations = [];
     for (const rule of rules) {
       if (rule.re.test(code)) violations.push(rule.why);
+    }
+    if (bitwiseRules.some((rule) => rule.test(code))) violations.push("bitwise operators");
+    if (/\bfor\s*\([^)]*\bin\b[^)]*\)/.test(code)) violations.push("for...in loops");
+
+    const forHeaderRe = /for\s*\(([^)]*)\)/g;
+    let forMatch;
+    while ((forMatch = forHeaderRe.exec(code))) {
+      const header = forMatch[1].trim();
+      if (/\bof\b/.test(header)) continue;
+      const parts = header.split(";").map((part) => part.trim());
+      if (parts.length !== 3) {
+        violations.push("invalid for-loop shape");
+        continue;
+      }
+      const initMatch = parts[0].match(/^let\s+([A-Z_a-z][A-Z_a-z0-9_]*)\s*=\s*0$/);
+      if (!initMatch) {
+        violations.push("for-loop initializer must be let i = 0");
+        continue;
+      }
+      const indexVar = initMatch[1];
+      if (!new RegExp("^" + indexVar + "\\s*(<|<=)\\s*.+$").test(parts[1])) {
+        violations.push("for-loop condition must be i < limit or i <= limit");
+      }
+      if (!new RegExp("^(?:" + indexVar + "\\+\\+|\\+\\+" + indexVar + ")$").test(parts[2])) {
+        violations.push("for-loop increment must be i++");
+      }
+    }
+
+    const lines = code.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    let depth = 0;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const lineDepth = depth;
+      if (trimmed) {
+        if (lineDepth > 0 && eventRegistrationRe.test(trimmed)) violations.push("nested event registration");
+        const fnDecl = trimmed.match(/^function\s+([A-Z_a-z][A-Z_a-z0-9_]*)\s*\(([^)]*)\)/);
+        if (fnDecl) {
+          if (lineDepth > 0) violations.push("non-top-level function declaration");
+          const params = fnDecl[2].trim();
+          if (params && (params.includes("?") || params.includes("="))) {
+            violations.push("optional/default parameters in function declaration");
+          }
+        }
+        if (/^let\s+[A-Z_a-z][A-Z_a-z0-9_]*(\s*:\s*[^=;]+)?\s*;?$/.test(trimmed)) {
+          violations.push("variable declaration without initializer");
+        }
+      }
+      const opens = (line.match(/\{/g) || []).length;
+      const closes = (line.match(/\}/g) || []).length;
+      depth = Math.max(0, depth + opens - closes);
     }
     if (/[^\x09\x0A\x0D\x20-\x7E]/.test(code)) violations.push("non-ASCII characters");
     return { ok: violations.length === 0, violations: [...new Set(violations)] };
@@ -996,6 +1057,11 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         if (!finalResult || !finalResult.code || !finalResult.code.trim()) {
           logLine("Model returned no code after retries. Using minimal stub.");
           return { code: stubForTarget(target), feedback };
+        }
+        if (!finalResult.validation || !finalResult.validation.ok) {
+          const violations = (finalResult.validation && finalResult.validation.violations) || [];
+          logLine("Model output still failed strict validation. Using minimal stub.");
+          return { code: stubForTarget(target), feedback: feedback.concat(["Validation fallback: " + violations.join(", ")]) };
         }
         return { code: finalResult.code, feedback };
       });

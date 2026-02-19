@@ -3,6 +3,8 @@ import { createServer } from "node:http";
 const PORT = Number(process.env.PORT || 8787);
 const ALLOW_ORIGIN = process.env.VIBBIT_ALLOW_ORIGIN || "*";
 const REQUEST_TIMEOUT_MS = Number(process.env.VIBBIT_REQUEST_TIMEOUT_MS || 60000);
+const EMPTY_RETRIES = Number(process.env.VIBBIT_EMPTY_RETRIES || 2);
+const VALIDATION_RETRIES = Number(process.env.VIBBIT_VALIDATION_RETRIES || 2);
 const SERVER_APP_TOKEN = process.env.SERVER_APP_TOKEN || "";
 const PROVIDER = (process.env.VIBBIT_PROVIDER || "openai").trim().toLowerCase();
 
@@ -113,6 +115,101 @@ function extractCode(raw) {
   const match = String(raw).match(/```[a-z]*\n([\s\S]*?)```/i);
   const code = match ? match[1] : raw;
   return sanitizeMakeCode(code);
+}
+
+function validateBlocksCompatibility(code, target) {
+  const rules = [
+    { re: /=>/g, why: "arrow functions" },
+    { re: /\bclass\s+/g, why: "classes" },
+    { re: /\bnew\s+[A-Z_a-z]/g, why: "new constructor" },
+    { re: /\bPromise\b|\basync\b|\bawait\b/g, why: "promises/async" },
+    { re: /\bimport\s|\bexport\s/g, why: "import/export" },
+    { re: /\$\{[^}]+\}/g, why: "template string interpolation" },
+    { re: /\.\s*(map|forEach|filter|reduce|find|some|every)\s*\(/g, why: "higher-order array methods" },
+    { re: /\bnamespace\b|\bmodule\b/g, why: "namespaces/modules" },
+    { re: /\benum\b|\binterface\b|\btype\s+[A-Z_a-z]/g, why: "TS types/enums" },
+    { re: /<\s*[A-Z_a-z0-9_,\s]+>/g, why: "generics syntax" },
+    { re: /setTimeout\s*\(|setInterval\s*\(/g, why: "timers" },
+    { re: /console\./g, why: "console calls" },
+    { re: /^\s*\/\//m, why: "line comments" },
+    { re: /\/\*[\s\S]*?\*\//g, why: "block comments" },
+    { re: /\bnull\b/g, why: "null" },
+    { re: /\bundefined\b/g, why: "undefined" },
+    { re: /\bas\s+[A-Z_a-z][A-Z_a-z0-9_.]*/g, why: "casts" },
+    { re: /(\*=|\/=|%=|\|=|&=|\^=|<<=|>>=|>>>=)/g, why: "unsupported assignment operators" }
+  ];
+  const bitwiseRules = [
+    /<<|>>>|>>/,
+    /\^/,
+    /(^|[^|])\|([^|=]|$)/m,
+    /(^|[^&])&([^&=]|$)/m
+  ];
+  const eventRegistrationRe = /\b(?:basic\.forever|loops\.forever|input\.on[A-Z_a-z0-9_]*|radio\.on[A-Z_a-z0-9_]*|pins\.on[A-Z_a-z0-9_]*|controller\.[A-Z_a-z0-9_]*\.onEvent|controller\.on[A-Z_a-z0-9_]*|sprites\.on[A-Z_a-z0-9_]*|scene\.on[A-Z_a-z0-9_]*|game\.on[A-Z_a-z0-9_]*|info\.on[A-Z_a-z0-9_]*|control\.inBackground)\s*\(/;
+
+  if ((target === "microbit" || target === "maker") && /sprites\.|controller\.|scene\.|game\.onUpdate/i.test(code)) {
+    return { ok: false, violations: ["Arcade APIs in micro:bit/Maker"] };
+  }
+  if (target === "arcade" && (/led\./i.test(code) || /radio\./i.test(code))) {
+    return { ok: false, violations: ["micro:bit APIs in Arcade"] };
+  }
+
+  const violations = [];
+  for (const rule of rules) {
+    if (rule.re.test(code)) violations.push(rule.why);
+  }
+  if (bitwiseRules.some((rule) => rule.test(code))) violations.push("bitwise operators");
+  if (/\bfor\s*\([^)]*\bin\b[^)]*\)/.test(code)) violations.push("for...in loops");
+
+  const forHeaderRe = /for\s*\(([^)]*)\)/g;
+  let forMatch;
+  while ((forMatch = forHeaderRe.exec(code))) {
+    const header = forMatch[1].trim();
+    if (/\bof\b/.test(header)) continue;
+    const parts = header.split(";").map((part) => part.trim());
+    if (parts.length !== 3) {
+      violations.push("invalid for-loop shape");
+      continue;
+    }
+    const initMatch = parts[0].match(/^let\s+([A-Z_a-z][A-Z_a-z0-9_]*)\s*=\s*0$/);
+    if (!initMatch) {
+      violations.push("for-loop initializer must be let i = 0");
+      continue;
+    }
+    const indexVar = initMatch[1];
+    if (!new RegExp("^" + indexVar + "\\s*(<|<=)\\s*.+$").test(parts[1])) {
+      violations.push("for-loop condition must be i < limit or i <= limit");
+    }
+    if (!new RegExp("^(?:" + indexVar + "\\+\\+|\\+\\+" + indexVar + ")$").test(parts[2])) {
+      violations.push("for-loop increment must be i++");
+    }
+  }
+
+  const lines = code.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  let depth = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const lineDepth = depth;
+    if (trimmed) {
+      if (lineDepth > 0 && eventRegistrationRe.test(trimmed)) violations.push("nested event registration");
+      const fnDecl = trimmed.match(/^function\s+([A-Z_a-z][A-Z_a-z0-9_]*)\s*\(([^)]*)\)/);
+      if (fnDecl) {
+        if (lineDepth > 0) violations.push("non-top-level function declaration");
+        const params = fnDecl[2].trim();
+        if (params && (params.includes("?") || params.includes("="))) {
+          violations.push("optional/default parameters in function declaration");
+        }
+      }
+      if (/^let\s+[A-Z_a-z][A-Z_a-z0-9_]*(\s*:\s*[^=;]+)?\s*;?$/.test(trimmed)) {
+        violations.push("variable declaration without initializer");
+      }
+    }
+    const opens = (line.match(/\{/g) || []).length;
+    const closes = (line.match(/\}/g) || []).length;
+    depth = Math.max(0, depth + opens - closes);
+  }
+
+  if (/[^\x09\x0A\x0D\x20-\x7E]/.test(code)) violations.push("non-ASCII characters");
+  return { ok: violations.length === 0, violations: [...new Set(violations)] };
 }
 
 function stubForTarget(target) {
@@ -382,28 +479,54 @@ async function generateManaged({ target, request, currentCode }) {
 
   const system = systemPromptFor(target);
   const user = userPromptFor(request, currentCode || "");
-
-  const raw = await withTimeout(async (signal) => {
-    if (provider === "openai") return callOpenAI(key, model, system, user, signal);
-    if (provider === "gemini") return callGemini(key, model, system, user, signal);
-    if (provider === "openrouter") return callOpenRouter(key, model, system, user, signal);
+  const callProvider = async (systemPrompt) => withTimeout(async (signal) => {
+    if (provider === "openai") return callOpenAI(key, model, systemPrompt, user, signal);
+    if (provider === "gemini") return callGemini(key, model, systemPrompt, user, signal);
+    if (provider === "openrouter") return callOpenRouter(key, model, systemPrompt, user, signal);
     throw new Error(`Unsupported VIBBIT_PROVIDER '${provider}'`);
   }, REQUEST_TIMEOUT_MS);
 
-  const parts = separateFeedback(raw);
-  const code = extractCode(parts.body);
+  const oneAttempt = async (extraSystem, insistOnlyCode) => {
+    const prompt = system
+      + (extraSystem ? ("\n" + extraSystem) : "")
+      + (insistOnlyCode ? "\nMANDATE: You must output only Blocks-decompilable MakeCode Static TypeScript." : "");
+    const raw = await callProvider(prompt);
+    const parts = separateFeedback(raw);
+    const code = extractCode(parts.body);
+    const validation = code ? validateBlocksCompatibility(code, target) : { ok: false, violations: ["empty output"] };
+    return { code, feedback: parts.feedback, validation };
+  };
 
-  if (!code) {
+  let result = await oneAttempt("", false);
+
+  for (let i = 0; i < EMPTY_RETRIES && (!result.code || !result.code.trim()); i++) {
+    result = await oneAttempt("Your last message returned no code. Return ONLY Blocks-decompilable MakeCode Static TypeScript. No prose.", true);
+  }
+
+  for (let i = 0; i < VALIDATION_RETRIES && result.code && result.code.trim() && result.validation && !result.validation.ok; i++) {
+    const violations = result.validation.violations || [];
+    const extra = i === 0
+      ? ("Previous code used: " + violations.join(", ") + ". Remove ALL forbidden constructs and return fully Blocks-compatible code.")
+      : ("STRICT MODE: Output a smaller program that fully decompiles to Blocks. Absolutely no: " + violations.join(", ") + ".");
+    result = await oneAttempt(extra, true);
+  }
+
+  if (!result.code || !result.code.trim()) {
     return {
       code: stubForTarget(target),
-      feedback: [...parts.feedback, "Model returned no code; provided fallback stub."]
+      feedback: [...result.feedback, "Model returned no code; provided fallback stub."]
     };
   }
 
-  return {
-    code,
-    feedback: parts.feedback
-  };
+  if (!result.validation || !result.validation.ok) {
+    const violations = (result.validation && result.validation.violations) || [];
+    return {
+      code: stubForTarget(target),
+      feedback: [...result.feedback, "Validation fallback: " + violations.join(", ")]
+    };
+  }
+
+  return { code: result.code, feedback: result.feedback };
 }
 
 function extractBearerToken(headerValue) {
