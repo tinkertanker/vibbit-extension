@@ -22,9 +22,10 @@ chrome.action.onClicked.addListener(async (tab) => {
     return;
   }
 
-  // Check FAB / panel state on the page
+  // Check FAB / panel state on the page (MAIN world so we can see __vibbitStrict)
   const results = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
+    world: 'MAIN',
     func: () => {
       const panel = document.getElementById('vibbit-panel');
       const fab = document.getElementById('vibbit-fab');
@@ -65,10 +66,12 @@ chrome.action.onClicked.addListener(async (tab) => {
     // Guard set but DOM removed – reset and re-inject
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
+      world: 'MAIN',
       func: () => { window.__vibbitStrict = 0; }
     });
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
+      world: 'MAIN',
       files: ['content-script.js']
     });
     // Panel starts hidden; open it since user explicitly clicked the icon
@@ -85,6 +88,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     // First time – inject the content script
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
+      world: 'MAIN',
       files: ['content-script.js']
     });
     // Panel starts hidden; open it since user explicitly clicked the icon

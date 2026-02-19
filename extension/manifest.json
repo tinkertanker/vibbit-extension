@@ -22,7 +22,8 @@
       "https://maker.makecode.com/*"
     ],
     "js": ["content-script.js"],
-    "run_at": "document_idle"
+    "run_at": "document_idle",
+    "world": "MAIN"
   }],
   "permissions": [
     "scripting",
