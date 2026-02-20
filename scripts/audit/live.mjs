@@ -96,7 +96,7 @@ async function waitForTerminalStatus(page) {
     const finalStates = ["Done", "Error", "No code", "Idle"];
     const status = document.querySelector("#status")?.textContent?.trim() || "";
     return finalStates.includes(status);
-  }, { timeout: 90000 });
+  }, undefined, { timeout: 90000 });
 
   return page.evaluate(() => {
     return {
@@ -107,6 +107,15 @@ async function waitForTerminalStatus(page) {
 }
 
 async function ensureAuditRuntime(page, runtimeSource) {
+  await page.addInitScript(() => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {
+      // Ignore storage access errors in hardened browser contexts.
+    }
+  });
+
   await page.goto("https://makecode.microbit.org/", {
     waitUntil: "domcontentloaded",
     timeout: 120000
@@ -114,7 +123,16 @@ async function ensureAuditRuntime(page, runtimeSource) {
   await page.waitForTimeout(4000);
 
   await page.addScriptTag({ content: runtimeSource });
-  await page.waitForSelector("#mode", { timeout: 20000 });
+  await page.waitForSelector("#vibbit-fab", { timeout: 20000 });
+  await page.click("#vibbit-fab");
+  await page.waitForSelector("#setup-go", { timeout: 20000 });
+
+  // Complete one-time setup in BYOK mode with a placeholder key so we can
+  // exercise both Managed and BYOK in a single live audit run.
+  await page.selectOption("#setup-mode", "byok");
+  await page.fill("#setup-key", "audit-placeholder-key");
+  await page.click("#setup-go");
+  await page.waitForSelector("#go", { timeout: 20000 });
 
   await page.evaluate(() => {
     if (window.__auditMonacoStub) return;
@@ -149,6 +167,45 @@ async function ensureAuditRuntime(page, runtimeSource) {
 
     window.__auditMonacoStub = true;
   });
+}
+
+async function configureModeInSettings(page, mode, options = {}) {
+  await page.click("#gear");
+  await page.waitForSelector("#set-mode", { timeout: 20000 });
+  await page.selectOption("#set-mode", mode);
+
+  if (mode === "byok") {
+    if (options.provider) {
+      await page.selectOption("#set-prov", options.provider);
+    }
+
+    if (options.model) {
+      await page.evaluate((targetModel) => {
+        const modelSel = document.querySelector("#set-model");
+        if (modelSel) {
+          const found = Array.from(modelSel.options).some((opt) => opt.value === targetModel);
+          if (found) {
+            modelSel.value = targetModel;
+            modelSel.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        }
+        // Runtime reads model from local storage, so force the intended model.
+        localStorage.setItem("__vibbit_model", targetModel);
+      }, options.model);
+    }
+
+    if (typeof options.key === "string" && options.key.length) {
+      await page.fill("#set-key", options.key);
+      await page.click("#save");
+    }
+  }
+
+  if (options.target) {
+    await page.selectOption("#set-target", options.target);
+  }
+
+  await page.click("#back");
+  await page.waitForSelector("#go", { timeout: 20000 });
 }
 
 function byokKeyForProvider(provider) {
@@ -233,7 +290,7 @@ try {
 
     await page.route(managedPattern, managedProxyHandler);
 
-    await page.selectOption("#mode", "managed");
+    await configureModeInSettings(page, "managed");
     if (await page.isChecked("#inc")) await page.uncheck("#inc");
     await page.fill("#p", managedPrompt);
     await page.click("#go");
@@ -258,10 +315,11 @@ try {
     const byokProxyHandler = createProxyHandler(byokProxyCounter);
     await page.route(providerConfig.endpointRegex, byokProxyHandler);
 
-    await page.selectOption("#mode", "byok");
-    await page.selectOption("#prov", providerConfig.provider);
-    await page.fill("#model", providerConfig.model);
-    await page.fill("#key", providerConfig.key);
+    await configureModeInSettings(page, "byok", {
+      provider: providerConfig.provider,
+      model: providerConfig.model,
+      key: providerConfig.key
+    });
     if (await page.isChecked("#inc")) await page.uncheck("#inc");
     await page.fill("#p", byokPrompt);
     await page.click("#go");
