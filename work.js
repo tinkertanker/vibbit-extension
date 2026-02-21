@@ -6,6 +6,28 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   window.__vibbitStrict = 1;
 
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const waitWithAbort = (ms, signal) => {
+    if (!signal) return wait(ms);
+    if (signal.aborted) return Promise.reject(createAbortError());
+    return new Promise((resolve, reject) => {
+      let done = false;
+      let timer = 0;
+      const onAbort = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        signal.removeEventListener("abort", onAbort);
+        reject(createAbortError());
+      };
+      timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      }, ms);
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+  };
 
   const STORAGE_MODE = "__vibbit_mode";
   const STORAGE_KEY_PREFIX = "__vibbit_key_";
@@ -79,7 +101,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   /* ── panel container ─────────────────────────────────────── */
   const ui = document.createElement("div");
   ui.id = "vibbit-panel";
-  ui.style.cssText = "position:fixed;right:12px;bottom:12px;width:460px;max-height:84vh;overflow:auto;background:#0b1020;color:#e6e8ef;font-family:system-ui,Segoe UI,Arial,sans-serif;border:1px solid #21304f;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:none;flex-direction:column;z-index:2147483647;transform-origin:bottom right;transition:transform .2s ease,opacity .2s ease";
+  ui.style.cssText = "position:fixed;right:12px;bottom:12px;width:460px;max-height:84vh;overflow:auto;background:#0b1020;color:#e6e8ef;font-family:system-ui,Segoe UI,Arial,sans-serif;border:1px solid #21304f;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:none;flex-direction:column;z-index:2147483646;transform-origin:bottom right;transition:transform .2s ease,opacity .2s ease";
 
   /* ── build HTML ──────────────────────────────────────────── */
   ui.innerHTML = ""
@@ -262,15 +284,51 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     + '<div id="rz" style="position:absolute;width:14px;height:14px;right:2px;bottom:2px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#2b3a5a 50%);opacity:.9"></div>';
 
   document.body.appendChild(ui);
+  const interactionOverlay = document.createElement("div");
+  interactionOverlay.id = "vibbit-interaction-overlay";
+  interactionOverlay.setAttribute("aria-hidden", "true");
+  interactionOverlay.innerHTML = ""
+    + '<div id="vibbit-overlay-card" data-mode="working" role="status" aria-live="polite" aria-atomic="true">'
+    + '  <div id="vibbit-overlay-icon-wrap" aria-hidden="true">'
+    + '    <svg id="vibbit-overlay-spinner" viewBox="0 0 44 44" fill="none" stroke="#c8d8ff" stroke-width="3">'
+    + '      <circle cx="22" cy="22" r="16" stroke-opacity=".22"></circle>'
+    + '      <path d="M22 6a16 16 0 0 1 16 16" stroke-linecap="round"></path>'
+    + '    </svg>'
+    + '    <svg id="vibbit-overlay-done" viewBox="0 0 44 44" fill="none" stroke="#9ef1b2" stroke-width="3">'
+    + '      <circle cx="22" cy="22" r="16" stroke-opacity=".35"></circle>'
+    + '      <path d="M14 23l6 6 10-12" stroke-linecap="round" stroke-linejoin="round"></path>'
+    + '    </svg>'
+    + '  </div>'
+    + '  <div id="vibbit-overlay-label">Generating code...</div>'
+    + '  <button id="vibbit-overlay-cancel" type="button" style="min-width:84px;height:30px;padding:0 12px;border-radius:999px;border:1px solid rgba(124,153,232,.45);background:#15213f;color:#dbe6ff;font-size:12px;font-weight:600;line-height:1;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;appearance:none;-webkit-appearance:none;cursor:pointer">Cancel</button>'
+    + '</div>';
+  document.body.appendChild(interactionOverlay);
+
   const runtimeStyle = document.createElement("style");
-  runtimeStyle.textContent = "@keyframes vibbit-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}";
+  runtimeStyle.textContent = [
+    "@keyframes vibbit-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}",
+    "@keyframes vibbit-overlay-pop{0%{transform:scale(.72);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}",
+    "#vibbit-interaction-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(6,10,20,.56);backdrop-filter:blur(2px);z-index:2147483647;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .18s ease,visibility .18s ease}",
+    "#vibbit-interaction-overlay[data-active='true']{opacity:1;visibility:visible;pointer-events:auto}",
+    "#vibbit-overlay-card{min-width:176px;padding:14px 18px;border-radius:12px;border:1px solid rgba(101,126,190,.35);background:rgba(10,17,35,.94);box-shadow:0 10px 32px rgba(0,0,0,.45);color:#e6e8ef;display:grid;justify-items:center;gap:9px}",
+    "#vibbit-overlay-icon-wrap{position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center}",
+    "#vibbit-overlay-spinner,#vibbit-overlay-done{position:absolute;top:0;left:0;width:44px;height:44px;transition:opacity .2s ease,transform .2s ease}",
+    "#vibbit-overlay-spinner{animation:vibbit-spin .9s linear infinite;opacity:1;transform:scale(1)}",
+    "#vibbit-overlay-done{opacity:0;transform:scale(.72)}",
+    "#vibbit-overlay-card[data-mode='done'] #vibbit-overlay-spinner{opacity:0;transform:scale(.82)}",
+    "#vibbit-overlay-card[data-mode='done'] #vibbit-overlay-done{opacity:1;transform:scale(1);animation:vibbit-overlay-pop .32s ease}",
+    "#vibbit-overlay-label{font-size:13px;font-weight:600;letter-spacing:.02em;white-space:nowrap}",
+    "#vibbit-overlay-cancel{display:inline-flex;align-items:center;justify-content:center;line-height:1;text-align:center}",
+    "#vibbit-overlay-cancel:hover{background:#1a2a52}",
+    "#vibbit-overlay-cancel:disabled{opacity:.6;cursor:default}"
+  ].join("\n");
   document.head.appendChild(runtimeStyle);
 
   /* ── FAB ─────────────────────────────────────────────────── */
   const fab = document.createElement("div");
   fab.id = "vibbit-fab";
   fab.title = "Vibbit \u2013 AI code generator";
-  fab.style.cssText = "position:fixed;right:20px;bottom:68px;width:44px;height:44px;border-radius:5px;background:#3454D1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(52,84,209,.45);z-index:2147483647;transition:transform .15s ease,box-shadow .15s ease;border:none;";
+  fab.style.cssText = "position:fixed;right:20px;bottom:68px;width:44px;height:44px;border-radius:5px;background:#3454D1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(52,84,209,.45);z-index:2147483646;transition:transform .15s ease,box-shadow .15s ease;border:none;";
   fab.innerHTML = '<svg width="26.4" height="26.4" viewBox="0 0 24 24" fill="none">'
     + '<path d="M9.5 2L10.7 6.5 15 8l-4.3 1.5L9.5 14l-1.2-4.5L4 8l4.3-1.5L9.5 2z" fill="#fff"/>'
     + '<path d="M19 10l.8 2.7L22.5 14l-2.7.8L19 17.5l-.8-2.7-2.7-.8 2.7-.8L19 10z" fill="#fff" opacity=".75"/>'
@@ -312,6 +370,9 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const views = { setup: $("#bv-setup"), main: $("#bv-main"), settings: $("#bv-settings") };
   const headers = [$("#h-setup"), $("#h-main"), $("#h-settings")];
   const resizer = $("#rz");
+  const overlayCard = interactionOverlay.querySelector("#vibbit-overlay-card");
+  const overlayLabel = interactionOverlay.querySelector("#vibbit-overlay-label");
+  const overlayCancelBtn = interactionOverlay.querySelector("#vibbit-overlay-cancel");
 
   /* setup view refs */
   const setupMode = $("#setup-mode");
@@ -418,6 +479,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   let feedbackCollapsed = false;
   let logsCollapsed = true;
   let activityTimer = 0;
+  let overlayTimer = 0;
+  let generationController = null;
 
   const setStatus = (value) => {
     const next = value || "";
@@ -428,6 +491,75 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const setBusyIndicator = (on) => {
     busyIndicator.style.visibility = on ? "visible" : "hidden";
     busyIndicator.style.opacity = on ? "1" : "0";
+  };
+
+  const createAbortError = () => {
+    try {
+      return new DOMException("Generation cancelled", "AbortError");
+    } catch (error) {
+      const fallback = new Error("Generation cancelled");
+      fallback.name = "AbortError";
+      return fallback;
+    }
+  };
+
+  const isAbortError = (error) => {
+    if (!error) return false;
+    if (error.name === "AbortError") return true;
+    const message = error && error.message ? String(error.message) : String(error);
+    return /aborted|abort/i.test(message);
+  };
+
+  const throwIfAborted = (signal) => {
+    if (signal && signal.aborted) throw createAbortError();
+  };
+
+  const showInteractionOverlay = () => {
+    clearTimeout(overlayTimer);
+    overlayCard.dataset.mode = "working";
+    overlayLabel.textContent = "Generating code...";
+    overlayCancelBtn.textContent = "Cancel";
+    overlayCancelBtn.disabled = false;
+    overlayCancelBtn.style.display = "inline-flex";
+    interactionOverlay.dataset.active = "true";
+    interactionOverlay.setAttribute("aria-hidden", "false");
+  };
+
+  const hideInteractionOverlay = (showDoneAnimation) => {
+    clearTimeout(overlayTimer);
+    if (interactionOverlay.dataset.active !== "true") return;
+    if (showDoneAnimation) {
+      overlayCard.dataset.mode = "done";
+      overlayLabel.textContent = "Done";
+      overlayCancelBtn.style.display = "none";
+      overlayTimer = setTimeout(() => {
+        interactionOverlay.dataset.active = "false";
+        interactionOverlay.setAttribute("aria-hidden", "true");
+        overlayCard.dataset.mode = "working";
+        overlayLabel.textContent = "Generating code...";
+        overlayCancelBtn.textContent = "Cancel";
+        overlayCancelBtn.disabled = false;
+        overlayCancelBtn.style.display = "inline-flex";
+      }, 550);
+      return;
+    }
+    interactionOverlay.dataset.active = "false";
+    interactionOverlay.setAttribute("aria-hidden", "true");
+    overlayCard.dataset.mode = "working";
+    overlayLabel.textContent = "Generating code...";
+    overlayCancelBtn.textContent = "Cancel";
+    overlayCancelBtn.disabled = false;
+    overlayCancelBtn.style.display = "inline-flex";
+  };
+
+  overlayCancelBtn.onclick = () => {
+    if (!busy || !generationController) return;
+    overlayCancelBtn.disabled = true;
+    overlayCancelBtn.textContent = "Cancelling...";
+    setStatus("Cancelling");
+    setActivity("Cancelling generation...", "neutral", true);
+    logLine("Cancelling generation...");
+    generationController.abort();
   };
 
   const setActivity = (message, tone, persistent) => {
@@ -667,7 +799,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return null;
   };
 
-  const findMonacoCtx = (timeoutMs = 18000) => {
+  const findMonacoCtx = (timeoutMs = 18000, signal) => {
     const deadline = performance.now() + timeoutMs;
     const candidates = [window, ...[...document.querySelectorAll("iframe")].map((frame) => {
       try {
@@ -686,6 +818,10 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
     return new Promise((resolve, reject) => {
       (function poll() {
+        if (signal && signal.aborted) {
+          reject(createAbortError());
+          return;
+        }
         if (performance.now() >= deadline) {
           reject(new Error("Monaco not found. Open the project editor, not the home page."));
           return;
@@ -784,7 +920,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return { checked: true, ok: true, greyBlocks: 0, snippets };
   };
 
-  const waitForDecompileProbe = (rootWin, timeoutMs = 6000) => {
+  const waitForDecompileProbe = (rootWin, timeoutMs = 6000, signal) => {
     const deadline = performance.now() + timeoutMs;
     const startedAt = performance.now();
     const minSettleMs = 1500;
@@ -794,6 +930,10 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       let stableReads = 0;
       let lastReport = { checked: false, ok: true, greyBlocks: 0, reason: "Blockly workspace unavailable" };
       (function poll() {
+        if (signal && signal.aborted) {
+          resolve({ checked: true, ok: false, greyBlocks: 0, reason: "Generation cancelled before decompile check." });
+          return;
+        }
         const report = inspectGreyBlocks(rootWin);
         lastReport = report;
         const signature = [
@@ -828,10 +968,13 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   const pasteToMakeCode = (code, options) => {
     const shouldSnapshot = !options || options.snapshot !== false;
-    return findMonacoCtx().then((ctx) => {
+    const signal = options && options.signal ? options.signal : null;
+    return findMonacoCtx(18000, signal).then((ctx) => {
+      throwIfAborted(signal);
       logLine("Switching to JavaScript tab.");
       clickLike(ctx.win.document, ["javascript", "typescript", "text"]);
-      return wait(20).then(() => {
+      return waitWithAbort(20, signal).then(() => {
+        throwIfAborted(signal);
         if (shouldSnapshot) {
           try {
             const previous = ctx.model.getValue() || "";
@@ -844,6 +987,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         }
         logLine("Pasting generated code into editor.");
         ctx.model.setValue(code);
+        throwIfAborted(signal);
         if (ctx.editor && ctx.editor.setPosition) {
           ctx.editor.setPosition({ lineNumber: 1, column: 1 });
         }
@@ -855,7 +999,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
             return clickLike(ctx.win.document, ["blocks"]);
           }
         })();
-        return wait(120).then(() => waitForDecompileProbe(ctx.win)).then((probe) => {
+        return waitWithAbort(120, signal).then(() => waitForDecompileProbe(ctx.win, 6000, signal)).then((probe) => {
+          throwIfAborted(signal);
           if (!probe.checked) {
             logLine("Live decompile check unavailable in this session.");
             return;
@@ -875,7 +1020,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const revertEditor = () => {
     return findMonacoCtx().then((ctx) => {
       if (!undoStack.length) throw new Error("No snapshot to revert to.");
-      const previous = undoStack.pop();
+      const previous = undoStack[undoStack.length - 1];
       logLine("Switching to JavaScript tab for revert.");
       clickLike(ctx.win.document, ["javascript", "typescript", "text"]);
       return wait(20).then(() => {
@@ -892,6 +1037,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
             return clickLike(ctx.win.document, ["blocks"]);
           }
         })();
+      }).then(() => {
+        undoStack.pop();
       });
     }).then(() => {
       refreshRevertButton();
@@ -1124,7 +1271,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return model.split(/[\s,]+/).map((item) => item.trim()).filter(Boolean);
   };
 
-  const callOpenAI = (key, model, system, user) => {
+  const callOpenAI = (key, model, system, user, signal) => {
     const resolvedModel = model || "gpt-5.2";
     const body = {
       model: resolvedModel,
@@ -1141,7 +1288,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal
       })
         .then((response) => {
           if (!response.ok) return response.text().then((text) => { throw new Error(text); });
@@ -1153,7 +1301,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     );
   };
 
-  const callGemini = (key, model, system, user) => {
+  const callGemini = (key, model, system, user, signal) => {
     const url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model || "gemini-3-flash-preview") + ":generateContent?key=" + encodeURIComponent(key);
     const body = {
       contents: [{ role: "user", parts: [{ text: system + "\n\n" + user }] }],
@@ -1163,7 +1311,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal
       })
         .then((response) => {
           if (!response.ok) return response.text().then((text) => { throw new Error(text); });
@@ -1175,7 +1324,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     );
   };
 
-  const callOpenRouter = (key, model, system, user) => {
+  const callOpenRouter = (key, model, system, user, signal) => {
     const models = parseModelList(model);
     const queue = models.length ? models : ["openrouter/auto"];
     const headers = {
@@ -1196,7 +1345,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers,
-          body: JSON.stringify(body)
+          body: JSON.stringify(body),
+          signal
         })
           .then((response) => {
             if (!response.ok) return response.text().then((text) => { throw new Error(text || ("HTTP " + response.status)); });
@@ -1222,6 +1372,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
           return result;
         })
         .catch((error) => {
+          if (isAbortError(error)) throw error;
           if (index < queue.length - 1) {
             logLine("Model " + modelName + " failed: " + (error && error.message ? error.message : String(error)) + ". Trying next model.");
             return attempt(index + 1);
@@ -1233,7 +1384,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return attempt(0);
   };
 
-  const askValidated = (provider, apiKey, model, system, user, target) => {
+  const askValidated = (provider, apiKey, model, system, user, target, signal) => {
     const providers = { openai: callOpenAI, gemini: callGemini, openrouter: callOpenRouter };
     const names = { openai: "OpenAI", gemini: "Gemini", openrouter: "OpenRouter" };
     const callProvider = providers[provider] || providers.openai;
@@ -1244,7 +1395,9 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         + (insistOnlyCode ? "\nMANDATE: You must output only Blocks-decompilable MakeCode Static TypeScript." : "");
       const providerName = names[provider] || provider;
       logLine("Sending to " + providerName + " (" + (model || "default") + ").");
-      return callProvider(apiKey, model, prompt, user).then((raw) => {
+      throwIfAborted(signal);
+      return callProvider(apiKey, model, prompt, user, signal).then((raw) => {
+        throwIfAborted(signal);
         const parts = separateFeedback(raw);
         const code = sanitizeMakeCode(extractCode(parts.body));
         const validation = validateBlocksCompatibility(code, target);
@@ -1259,6 +1412,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
           if (index >= EMPTY_RETRIES) return previous;
           const extra = "Your last message returned no code. Return ONLY Blocks-decompilable MakeCode Static TypeScript. No prose.";
           return oneAttempt(extra, true).then((next) => {
+            throwIfAborted(signal);
             if (next.code && next.code.trim()) return next;
             return retryEmpty(index + 1, next);
           });
@@ -1271,6 +1425,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         const violations = (firstPass.validation && firstPass.validation.violations) || [];
         const extra = "Previous code used: " + violations.join(", ") + ". Remove ALL forbidden constructs. Use only " + (target === "arcade" ? "Arcade" : "micro:bit/Maker") + " APIs.";
         return oneAttempt(extra, true).then((secondPass) => {
+          throwIfAborted(signal);
           if (secondPass.validation && secondPass.validation.ok) return secondPass;
           const secondViolations = (secondPass.validation && secondPass.validation.violations) || [];
           const strictExtra = "STRICT MODE: Output a smaller program that fully decompiles to Blocks. Absolutely no: " + secondViolations.join(", ") + ".";
@@ -1298,12 +1453,13 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return headers;
   };
 
-  const requestBackendGenerate = (payload) => {
+  const requestBackendGenerate = (payload, signal) => {
     const backendUrl = getBackendUrl();
     return fetch(backendUrl + "/vibbit/generate", {
       method: "POST",
       headers: buildBackendHeaders(),
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal
     }).then(async (response) => {
       if (response.ok) return response.json();
       let message = "HTTP " + response.status;
@@ -1318,9 +1474,18 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   /* ── generate handler ────────────────────────────────────── */
   go.onclick = () => {
+    const request = (promptEl.value || "").trim();
+    if (!request) {
+      setStatus("Idle");
+      setActivity("Please enter a request.", "error");
+      logLine("Please enter a request.");
+      return;
+    }
+
     if (busy) return;
     busy = true;
     setBusyIndicator(true);
+    showInteractionOverlay();
     refreshRevertButton();
     setActivity("", "neutral", true);
 
@@ -1329,32 +1494,27 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     setStatus("Working");
     logLine("Generating...");
 
-    const request = (promptEl.value || "").trim();
-    if (!request) {
-      busy = false;
-      setBusyIndicator(false);
-      refreshRevertButton();
-      setStatus("Idle");
-      setActivity("Please enter a request.", "error");
-      logLine("Please enter a request.");
-      return;
-    }
-
     const mode = storageGet(STORAGE_MODE) || "byok";
     const target = storageGet(STORAGE_TARGET) || "microbit";
     const originalText = go.textContent;
+    const undoDepthBeforeGenerate = undoStack.length;
+    generationController = new AbortController();
+    const signal = generationController.signal;
+    let showDoneAnimation = false;
     go.textContent = "Generating...";
     go.disabled = true;
     go.style.opacity = "0.7";
     go.style.cursor = "not-allowed";
 
     const currentPromise = includeCurrent.checked
-      ? findMonacoCtx()
+      ? findMonacoCtx(18000, signal)
         .then((ctx) => {
+          throwIfAborted(signal);
           logLine("Reading current JavaScript.");
           return ctx.model.getValue() || "";
         })
-        .catch(() => {
+        .catch((error) => {
+          if (isAbortError(error) || signal.aborted) throw error;
           logLine("Could not read current code.");
           return "";
         })
@@ -1362,9 +1522,10 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
     currentPromise
       .then((currentCode) => {
+        throwIfAborted(signal);
         if (mode === "managed") {
           logLine("Mode: Managed backend.");
-          return requestBackendGenerate({ target, request, currentCode });
+          return requestBackendGenerate({ target, request, currentCode }, signal);
         }
 
         const provider = storageGet(STORAGE_PROVIDER) || "openai";
@@ -1373,45 +1534,75 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         const model = storageGet(STORAGE_MODEL) || "";
 
         logLine("Mode: BYOK.");
-        return askValidated(provider, apiKey, model, sysFor(target), userFor(request, currentCode), target);
+        return askValidated(provider, apiKey, model, sysFor(target), userFor(request, currentCode), target, signal);
       })
       .then((result) => {
+        throwIfAborted(signal);
         const feedback = result && Array.isArray(result.feedback) ? result.feedback : [];
         renderFeedback(feedback);
 
         const code = extractCode(result && result.code ? result.code : "");
         if (!code) {
           setStatus("No code");
+          showDoneAnimation = true;
           setActivity("No code returned.", "error");
           logLine("No code returned.");
           return;
         }
 
         setStatus("Pasting");
-        return pasteToMakeCode(code)
+        return pasteToMakeCode(code, { signal })
           .catch((error) => {
+            throwIfAborted(signal);
             const message = error && error.message ? error.message : String(error);
             if (!/grey JavaScript block/i.test(message)) throw error;
             logLine("Live decompile check failed: " + message);
             logLine("Applying minimal fallback stub.");
             const fallbackFeedback = feedback.concat(["Live editor fallback: " + message]);
             renderFeedback(fallbackFeedback);
-            return pasteToMakeCode(stubForTarget(target), { snapshot: false });
+            return pasteToMakeCode(stubForTarget(target), { snapshot: false, signal });
           })
           .then(() => {
+            throwIfAborted(signal);
             setStatus("Done");
+            showDoneAnimation = true;
             setActivity("Generation complete.", "success");
             logLine("Pasted and switched back to Blocks.");
           });
       })
       .catch((error) => {
+        if (isAbortError(error) || signal.aborted) {
+          const shouldRestore = undoStack.length > undoDepthBeforeGenerate;
+          if (!shouldRestore) {
+            setStatus("Cancelled");
+            setActivity("Generation cancelled.", "neutral");
+            logLine("Generation cancelled.");
+            return;
+          }
+          setStatus("Cancelling");
+          setActivity("Generation cancelled. Restoring previous code...", "neutral", true);
+          logLine("Generation cancelled after code updates. Restoring previous snapshot...");
+          return revertEditor()
+            .then(() => {
+              setStatus("Cancelled");
+              setActivity("Generation cancelled. Previous code restored.", "neutral");
+              logLine("Previous code restored after cancellation.");
+            })
+            .catch((restoreError) => {
+              setStatus("Error");
+              setActivity("Generation cancelled but restore failed. Check logs.", "error", true);
+              logLine("Restore after cancellation failed: " + (restoreError && restoreError.message ? restoreError.message : String(restoreError)));
+            });
+        }
         setStatus("Error");
         setActivity("Generation failed. Check logs.", "error", true);
         logLine("Request failed: " + (error && error.message ? error.message : String(error)));
       })
       .finally(() => {
+        generationController = null;
         busy = false;
         setBusyIndicator(false);
+        hideInteractionOverlay(showDoneAnimation);
         go.textContent = originalText;
         go.disabled = false;
         go.style.opacity = "";
