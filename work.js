@@ -950,6 +950,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       { re: /console\./g, why: "console calls" },
       { re: /^\s*\/\//m, why: "line comments" },
       { re: /\/\*[\s\S]*?\*\//g, why: "block comments" },
+      { re: /\brandint\s*\(/g, why: "randint()" },
       { re: /(\*=|\/=|%=|\|=|&=|\^=|<<=|>>=|>>>=)/g, why: "unsupported assignment operators" }
     ];
     const bitwiseRules = [
@@ -1053,6 +1054,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       "RESPONSE FORMAT: After any feedback lines, output ONLY Microsoft MakeCode Static TypeScript with no markdown fences or extra prose.",
       "NO COMMENTS inside the code.",
       "ALLOWED APIS: " + namespaceList + ". Prefer event handlers and forever/update loops.",
+      "RANDOMNESS: For random choices, prefer list._pickRandom() from an array of options. Do NOT use randint(...).",
       "BLOCK-SAFE REQUIREMENTS (hard): no grey JavaScript blocks; every variable declaration must have an initializer; for loops must be exactly for (let i = 0; i < limit; i++) or for (let i = 0; i <= limit; i++); event registrations and function declarations must be top-level; no optional/default params in user-defined functions; callbacks/event handlers must not return a value; do not pass more arguments than block signatures support; statement assignment operators are limited to =, +=, -=.",
       "FORBIDDEN IN OUTPUT: arrow functions (=>), classes, new constructors, async/await/Promise, import/export, template strings (`), higher-order array methods (map/filter/reduce/forEach/find/some/every), namespaces/modules, enums, interfaces, type aliases, generics, timers (setTimeout/setInterval), console calls, markdown, escaped newlines, onstart functions, null, undefined, as-casts, bitwise operators (| & ^ << >> >>>) and bitwise compound assignments.",
       "TARGET-SCOPE: Use ONLY APIs valid for " + targetName + ". Never mix Arcade APIs into micro:bit/Maker or vice versa.",

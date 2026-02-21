@@ -133,6 +133,7 @@ function validateBlocksCompatibility(code, target) {
     { re: /console\./g, why: "console calls" },
     { re: /^\s*\/\//m, why: "line comments" },
     { re: /\/\*[\s\S]*?\*\//g, why: "block comments" },
+    { re: /\brandint\s*\(/g, why: "randint()" },
     { re: /(\*=|\/=|%=|\|=|&=|\^=|<<=|>>=|>>>=)/g, why: "unsupported assignment operators" }
   ];
   const bitwiseRules = [
@@ -348,6 +349,7 @@ function systemPromptFor(target) {
     "- Forever loops: basic.forever(function () { })",
     "- Variables with let: let x = 0",
     "- Control flow: if/else, while, for (let i = 0; i < n; i++), for (let v of list)",
+    "- Random choice from a list: options._pickRandom()",
     "- Named functions: function doSomething() { }",
     "",
     "BLOCK-SAFE REQUIREMENTS (hard):",
@@ -369,6 +371,7 @@ function systemPromptFor(target) {
     "- import/export, async/await, yield, eval",
     "- Classes, interfaces, type aliases, enums, generics in user code",
     "- Higher-order array methods (map/filter/reduce/forEach)",
+    "- randint(...) (use list._pickRandom() for random selections)",
     "- null, undefined, casts (as), bitwise operators (| & ^ << >> >>>), bitwise compound assignments",
     "- setTimeout, setInterval, console, Promise",
     "- Comments, markdown fences, prose after code",
