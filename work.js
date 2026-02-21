@@ -8,7 +8,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const STORAGE_MODE = "__vibbit_mode";
-  const STORAGE_KEY = "__vibbit_key";
+  const STORAGE_KEY_PREFIX = "__vibbit_key_";
   const STORAGE_PROVIDER = "__vibbit_provider";
   const STORAGE_MODEL = "__vibbit_model";
   const STORAGE_SETUP_DONE = "__vibbit_setup_done";
@@ -48,6 +48,24 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       localStorage.setItem(key, value);
     } catch (error) {
     }
+  };
+
+  const storageRemove = (key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+    }
+  };
+
+  const keyStorageForProvider = (provider) => STORAGE_KEY_PREFIX + (provider || "openai");
+
+  const getStoredProviderKey = (provider) => storageGet(keyStorageForProvider(provider)) || "";
+
+  const setStoredProviderKey = (provider, value) => {
+    const normalized = String(value || "").trim();
+    const key = keyStorageForProvider(provider);
+    if (normalized) storageSet(key, normalized);
+    else storageRemove(key);
   };
 
   /* ── shared styles ───────────────────────────────────────── */
@@ -526,7 +544,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const savedMode = storageGet(STORAGE_MODE) || "byok";
   const savedProvider = storageGet(STORAGE_PROVIDER) || "openai";
   const savedModel = storageGet(STORAGE_MODEL);
-  const savedKey = storageGet(STORAGE_KEY) || "";
+  const savedKey = getStoredProviderKey(savedProvider);
   const savedServer = storageGet(STORAGE_SERVER) || "";
   const savedTarget = storageGet(STORAGE_TARGET) || "microbit";
   const setupDone = storageGet(STORAGE_SETUP_DONE) === "1";
@@ -558,6 +576,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   setupProv.onchange = () => {
     populateModels(setupModel, setupProv.value, null);
+    setupKey.value = getStoredProviderKey(setupProv.value);
   };
 
   setupGo.onclick = () => {
@@ -572,7 +591,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       setupKey.style.borderColor = "#29324e";
       storageSet(STORAGE_PROVIDER, setupProv.value);
       storageSet(STORAGE_MODEL, setupModel.value);
-      storageSet(STORAGE_KEY, key);
+      setStoredProviderKey(setupProv.value, key);
     } else {
       const server = setupServer.value.trim() || DEFAULT_SERVER;
       storageSet(STORAGE_SERVER, server);
@@ -584,7 +603,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     setMode.value = mode;
     setProv.value = setupProv.value;
     populateModels(setModel, setupProv.value, setupModel.value);
-    setKey.value = setupKey.value;
+    setKey.value = getStoredProviderKey(setupProv.value);
     setServer.value = setupServer.value;
     applySettingsMode();
 
@@ -601,6 +620,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     storageSet(STORAGE_PROVIDER, setProv.value);
     /* select the default and persist */
     storageSet(STORAGE_MODEL, setModel.value);
+    setKey.value = getStoredProviderKey(setProv.value);
   };
 
   setModel.onchange = () => {
@@ -609,7 +629,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   saveBtn.onclick = () => {
     try {
-      storageSet(STORAGE_KEY, setKey.value.trim());
+      setStoredProviderKey(setProv.value, setKey.value.trim());
       setStatus("Key saved");
       logLine("BYOK API key saved in this browser.");
     } catch (error) {
@@ -1347,9 +1367,9 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
           return requestBackendGenerate({ target, request, currentCode });
         }
 
-        const apiKey = (storageGet(STORAGE_KEY) || "").trim();
-        if (!apiKey) throw new Error("Enter API key for BYOK mode (open Settings).");
         const provider = storageGet(STORAGE_PROVIDER) || "openai";
+        const apiKey = getStoredProviderKey(provider).trim();
+        if (!apiKey) throw new Error("Enter API key for BYOK mode (open Settings).");
         const model = storageGet(STORAGE_MODEL) || "";
 
         logLine("Mode: BYOK.");
