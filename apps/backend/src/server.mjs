@@ -7,6 +7,7 @@ const EMPTY_RETRIES = Number(process.env.VIBBIT_EMPTY_RETRIES || 2);
 const VALIDATION_RETRIES = Number(process.env.VIBBIT_VALIDATION_RETRIES || 2);
 const SERVER_APP_TOKEN = process.env.SERVER_APP_TOKEN || "";
 const PROVIDER = (process.env.VIBBIT_PROVIDER || "openai").trim().toLowerCase();
+const DEFAULT_FEEDBACK = "Model completed generation without explicit feedback notes.";
 
 function modelFor(provider) {
   if (provider === "openai") return process.env.VIBBIT_OPENAI_MODEL || process.env.VIBBIT_MODEL || "gpt-4o-mini";
@@ -94,20 +95,96 @@ function sanitizeMakeCode(input) {
   return text.trim();
 }
 
-function separateFeedback(raw) {
-  const feedback = [];
-  if (!raw) return { feedback, body: "" };
-  const lines = String(raw).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-  const bodyLines = [];
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (/^FEEDBACK:/i.test(trimmed)) {
-      feedback.push(trimmed.replace(/^FEEDBACK:\s*/i, "").trim());
-    } else {
-      bodyLines.push(line);
+function normaliseFeedback(items, fallback = "") {
+  const seen = new Set();
+  const list = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const text = String(item || "").trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push(text);
+  }
+  if (!list.length && fallback) list.push(fallback);
+  return list;
+}
+
+function extractJsonObjectCandidates(text) {
+  const matches = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === "\"") inString = false;
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") {
+      if (depth === 0) start = i;
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start !== -1) {
+        matches.push(text.slice(start, i + 1));
+        start = -1;
+      }
     }
   }
-  return { feedback, body: bodyLines.join("\n").trim() };
+
+  return matches;
+}
+
+function parseJsonObjectsFromText(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return [];
+
+  const candidates = [text];
+  const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch && fencedMatch[1]) candidates.push(fencedMatch[1].trim());
+  candidates.push(...extractJsonObjectCandidates(text));
+
+  const parsedObjects = [];
+  const seen = new Set();
+  for (const candidate of candidates) {
+    const source = String(candidate || "").trim();
+    if (!source || seen.has(source)) continue;
+    seen.add(source);
+    try {
+      const parsed = JSON.parse(source);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        parsedObjects.push(parsed);
+      }
+    } catch (error) {
+    }
+  }
+  return parsedObjects;
+}
+
+function isModelOutputObject(parsed) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  return Object.prototype.hasOwnProperty.call(parsed, "code");
 }
 
 function extractCode(raw) {
@@ -115,6 +192,21 @@ function extractCode(raw) {
   const match = String(raw).match(/```[a-z]*\n([\s\S]*?)```/i);
   const code = match ? match[1] : raw;
   return sanitizeMakeCode(code);
+}
+
+function parseModelOutput(raw) {
+  const parsedObjects = parseJsonObjectsFromText(raw);
+  for (const parsed of parsedObjects) {
+    if (!isModelOutputObject(parsed)) continue;
+    const rawFeedback = Array.isArray(parsed.feedback)
+      ? parsed.feedback
+      : (parsed.feedback == null ? [] : [parsed.feedback]);
+    return {
+      feedback: normaliseFeedback(rawFeedback),
+      code: extractCode(parsed.code == null ? "" : String(parsed.code))
+    };
+  }
+  return { feedback: [], code: extractCode(raw) };
 }
 
 function validateBlocksCompatibility(code, target) {
@@ -377,9 +469,11 @@ function systemPromptFor(target) {
     "- Comments, markdown fences, prose after code",
     "",
     "RESPONSE FORMAT:",
-    "- You may prefix short notes with FEEDBACK: (one per line)",
-    "- Then output ONLY MakeCode Static TypeScript, no markdown fences or extra prose",
-    "- Straight quotes, ASCII only, real newlines, function () { } handlers",
+    "- Return ONLY a JSON object with this exact shape:",
+    "- {\"feedback\":[\"short note\"],\"code\":\"MakeCode Static TypeScript with \\\\n escapes\"}",
+    "- feedback must be an array of one or more short strings",
+    "- code must be MakeCode Static TypeScript encoded as a JSON string (use escaped \\n for new lines, no markdown fences)",
+    "- Straight quotes, ASCII only, function () { } handlers",
     "- If PAGE_ERRORS are provided, treat them as failing diagnostics and prioritise resolving all of them",
     "- If CONVERSION_DIALOG is provided, ensure the output converts from JavaScript back to Blocks in MakeCode",
     "",
@@ -513,18 +607,18 @@ async function generateManaged({ target, request, currentCode, pageErrors, conve
   const oneAttempt = async (extraSystem, insistOnlyCode) => {
     const prompt = system
       + (extraSystem ? ("\n" + extraSystem) : "")
-      + (insistOnlyCode ? "\nMANDATE: You must output only Blocks-decompilable MakeCode Static TypeScript." : "");
+      + (insistOnlyCode ? "\nMANDATE: Output only compact JSON with keys feedback (array) and code (string). No prose." : "");
     const raw = await callProvider(prompt);
-    const parts = separateFeedback(raw);
-    const code = extractCode(parts.body);
+    const parsed = parseModelOutput(raw);
+    const code = parsed.code;
     const validation = code ? validateBlocksCompatibility(code, target) : { ok: false, violations: ["empty output"] };
-    return { code, feedback: parts.feedback, validation };
+    return { code, feedback: parsed.feedback, validation };
   };
 
   let result = await oneAttempt("", false);
 
   for (let i = 0; i < EMPTY_RETRIES && (!result.code || !result.code.trim()); i++) {
-    result = await oneAttempt("Your last message returned no code. Return ONLY Blocks-decompilable MakeCode Static TypeScript. No prose.", true);
+    result = await oneAttempt("Your last message had empty code. Return valid JSON only with feedback[] and code string.", true);
   }
 
   for (let i = 0; i < VALIDATION_RETRIES && result.code && result.code.trim() && result.validation && !result.validation.ok; i++) {
@@ -538,7 +632,10 @@ async function generateManaged({ target, request, currentCode, pageErrors, conve
   if (!result.code || !result.code.trim()) {
     return {
       code: stubForTarget(target),
-      feedback: [...result.feedback, "Model returned no code; provided fallback stub."]
+      feedback: normaliseFeedback(
+        [...(result.feedback || []), "Model returned no code; provided fallback stub."],
+        DEFAULT_FEEDBACK
+      )
     };
   }
 
@@ -546,11 +643,17 @@ async function generateManaged({ target, request, currentCode, pageErrors, conve
     const violations = (result.validation && result.validation.violations) || [];
     return {
       code: stubForTarget(target),
-      feedback: [...result.feedback, "Validation fallback: " + violations.join(", ")]
+      feedback: normaliseFeedback(
+        [...(result.feedback || []), "Validation fallback: " + (violations.join(", ") || "unknown compatibility issue")],
+        DEFAULT_FEEDBACK
+      )
     };
   }
 
-  return { code: result.code, feedback: result.feedback };
+  return {
+    code: result.code,
+    feedback: normaliseFeedback(result.feedback, DEFAULT_FEEDBACK)
+  };
 }
 
 function extractBearerToken(headerValue) {

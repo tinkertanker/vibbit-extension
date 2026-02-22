@@ -701,6 +701,9 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   };
 
   /* ── feedback panel ──────────────────────────────────────── */
+  const DEFAULT_FEEDBACK_MESSAGE = "Model completed generation without explicit feedback notes.";
+  const DEFAULT_FAILURE_FEEDBACK = "Generation failed before model feedback was available.";
+
   const applyFeedbackCollapse = () => {
     if (feedbackCollapsed) {
       feedbackLines.style.display = "none";
@@ -717,7 +720,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   const renderFeedback = (items) => {
     feedbackLines.innerHTML = "";
-    const list = (items || []).filter((item) => item && String(item).trim());
+    const list = normaliseFeedback(items);
     if (!list.length) {
       feedbackCollapsed = false;
       feedbackBox.style.display = "none";
@@ -1354,20 +1357,94 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return text.trim();
   };
 
-  const separateFeedback = (raw) => {
-    const feedback = [];
-    if (!raw) return { feedback, body: "" };
-    const lines = String(raw).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-    const bodyLines = [];
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (/^FEEDBACK:/i.test(trimmed)) {
-        feedback.push(trimmed.replace(/^FEEDBACK:\s*/i, "").trim());
-      } else {
-        bodyLines.push(line);
+  const normaliseFeedback = (items, fallback) => {
+    const seen = new Set();
+    const list = [];
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const text = String(item || "").trim();
+      if (!text) return;
+      const key = text.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      list.push(text);
+    });
+    if (!list.length && fallback) list.push(String(fallback).trim());
+    return list;
+  };
+
+  const extractJsonObjectCandidates = (text) => {
+    const matches = [];
+    let depth = 0;
+    let start = -1;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < text.length; i += 1) {
+      const char = text[i];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char === "\\") {
+          escaped = true;
+          continue;
+        }
+        if (char === "\"") inString = false;
+        continue;
+      }
+
+      if (char === "\"") {
+        inString = true;
+        continue;
+      }
+
+      if (char === "{") {
+        if (depth === 0) start = i;
+        depth += 1;
+        continue;
+      }
+
+      if (char === "}" && depth > 0) {
+        depth -= 1;
+        if (depth === 0 && start !== -1) {
+          matches.push(text.slice(start, i + 1));
+          start = -1;
+        }
       }
     }
-    return { feedback, body: bodyLines.join("\n").trim() };
+
+    return matches;
+  };
+
+  const parseJsonObjectsFromText = (raw) => {
+    const text = String(raw || "").trim();
+    if (!text) return [];
+    const candidates = [text];
+    const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fencedMatch && fencedMatch[1]) candidates.push(fencedMatch[1].trim());
+    candidates.push(...extractJsonObjectCandidates(text));
+    const parsedObjects = [];
+    const seen = new Set();
+    for (const candidate of candidates) {
+      const source = String(candidate || "").trim();
+      if (!source || seen.has(source)) continue;
+      seen.add(source);
+      try {
+        const parsed = JSON.parse(source);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          parsedObjects.push(parsed);
+        }
+      } catch (error) {
+      }
+    }
+    return parsedObjects;
+  };
+
+  const isModelOutputObject = (parsed) => {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+    return Object.prototype.hasOwnProperty.call(parsed, "code");
   };
 
   const extractCode = (raw) => {
@@ -1375,6 +1452,21 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     const match = String(raw).match(/```[a-z]*\n([\s\S]*?)```/i);
     const code = match ? match[1] : raw;
     return sanitizeMakeCode(code);
+  };
+
+  const parseModelOutput = (raw) => {
+    const parsedObjects = parseJsonObjectsFromText(raw);
+    for (const parsed of parsedObjects) {
+      if (!isModelOutputObject(parsed)) continue;
+      const feedback = Array.isArray(parsed.feedback)
+        ? parsed.feedback
+        : (parsed.feedback == null ? [] : [parsed.feedback]);
+      return {
+        feedback: normaliseFeedback(feedback),
+        code: extractCode(parsed.code == null ? "" : String(parsed.code))
+      };
+    }
+    return { feedback: [], code: extractCode(raw) };
   };
 
   const validateBlocksCompatibility = (code, target) => {
@@ -1493,17 +1585,19 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return [
       "ROLE: You are a Microsoft MakeCode assistant.",
       "HARD REQUIREMENT: Return ONLY Microsoft MakeCode Static JavaScript that the MakeCode decompiler can convert to BLOCKS for " + targetName + " with ZERO errors.",
-      "OPTIONAL FEEDBACK: You may send brief notes before the code. Prefix each note with FEEDBACK: .",
-      "RESPONSE FORMAT: After any feedback lines, output ONLY Microsoft MakeCode Static TypeScript with no markdown fences or extra prose.",
+      "RESPONSE FORMAT (required): Return ONLY compact JSON with keys feedback and code.",
+      "FORMAT DETAILS: {\"feedback\":[\"short note\"],\"code\":\"MakeCode Static TypeScript with \\\\n escapes\"}.",
+      "FEEDBACK RULE: feedback must be an array with at least one short string.",
+      "CODE RULE: code must be MakeCode Static TypeScript encoded as a JSON string (use escaped \\n for new lines, no markdown fences).",
       "NO COMMENTS inside the code.",
       "ERROR FIXING: If PAGE_ERRORS are provided, treat them as failing diagnostics and prioritise resolving all of them in your output.",
       "BLOCKS CONVERSION: If CONVERSION_DIALOG is provided, ensure the output can be converted from JavaScript back to Blocks in MakeCode.",
       "ALLOWED APIS: " + namespaceList + ". Prefer event handlers and forever/update loops.",
       "RANDOMNESS: For random choices, prefer list._pickRandom() from an array of options. Do NOT use randint(...).",
       "BLOCK-SAFE REQUIREMENTS (hard): no grey JavaScript blocks; every variable declaration must have an initializer; for loops must be exactly for (let i = 0; i < limit; i++) or for (let i = 0; i <= limit; i++); event registrations and function declarations must be top-level; no optional/default params in user-defined functions; callbacks/event handlers must not return a value; do not pass more arguments than block signatures support; statement assignment operators are limited to =, +=, -=.",
-      "FORBIDDEN IN OUTPUT: arrow functions (=>), classes, new constructors, async/await/Promise, import/export, template strings (`), higher-order array methods (map/filter/reduce/forEach/find/some/every), namespaces/modules, enums, interfaces, type aliases, generics, timers (setTimeout/setInterval), console calls, markdown, escaped newlines, onstart functions, null, undefined, as-casts, bitwise operators (| & ^ << >> >>>) and bitwise compound assignments.",
+      "FORBIDDEN IN OUTPUT: arrow functions (=>), classes, new constructors, async/await/Promise, import/export, template strings (`), higher-order array methods (map/filter/reduce/forEach/find/some/every), namespaces/modules, enums, interfaces, type aliases, generics, timers (setTimeout/setInterval), console calls, markdown, onstart functions, null, undefined, as-casts, bitwise operators (| & ^ << >> >>>) and bitwise compound assignments.",
       "TARGET-SCOPE: Use ONLY APIs valid for " + targetName + ". Never mix Arcade APIs into micro:bit/Maker or vice versa.",
-      "STYLE: Straight quotes, ASCII only, real newlines, use function () { } handlers.",
+      "STYLE: Straight quotes, ASCII only, use function () { } handlers.",
       "IF UNSURE: Return a minimal program that is guaranteed to decompile to BLOCKS for " + targetName + ". Code only."
     ].join("\n");
   };
@@ -1705,16 +1799,16 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     const oneAttempt = (extraSystem, insistOnlyCode) => {
       const prompt = system
         + (extraSystem ? ("\n" + extraSystem) : "")
-        + (insistOnlyCode ? "\nMANDATE: You must output only Blocks-decompilable MakeCode Static TypeScript." : "");
+        + (insistOnlyCode ? "\nMANDATE: Output only compact JSON with keys feedback (array) and code (string). No prose." : "");
       const providerName = names[provider] || provider;
       logLine("Sending to " + providerName + " (" + (model || "default") + ").");
       throwIfAborted(signal);
       return callProvider(apiKey, model, prompt, user, signal).then((raw) => {
         throwIfAborted(signal);
-        const parts = separateFeedback(raw);
-        const code = sanitizeMakeCode(extractCode(parts.body));
+        const parsed = parseModelOutput(raw);
+        const code = sanitizeMakeCode(parsed.code);
         const validation = validateBlocksCompatibility(code, target);
-        return { code, validation, feedback: parts.feedback };
+        return { code, validation, feedback: parsed.feedback };
       });
     };
 
@@ -1723,7 +1817,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         if (result.code && result.code.trim()) return result;
         const retryEmpty = (index, previous) => {
           if (index >= EMPTY_RETRIES) return previous;
-          const extra = "Your last message returned no code. Return ONLY Blocks-decompilable MakeCode Static TypeScript. No prose.";
+          const extra = "Your last message had empty code. Return valid JSON only with feedback[] and code string.";
           return oneAttempt(extra, true).then((next) => {
             throwIfAborted(signal);
             if (next.code && next.code.trim()) return next;
@@ -1746,15 +1840,15 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         });
       })
       .then((finalResult) => {
-        const feedback = finalResult && Array.isArray(finalResult.feedback) ? finalResult.feedback : [];
+        const feedback = normaliseFeedback(finalResult && finalResult.feedback);
         if (!finalResult || !finalResult.code || !finalResult.code.trim()) {
           logLine("Model returned no code after retries. Using minimal stub.");
-          return { code: stubForTarget(target), feedback };
+          return { code: stubForTarget(target), feedback: normaliseFeedback(feedback.concat(["Model returned no code; provided fallback stub."])) };
         }
         if (!finalResult.validation || !finalResult.validation.ok) {
           const violations = (finalResult.validation && finalResult.validation.violations) || [];
           logLine("Model output still failed strict validation. Using minimal stub.");
-          return { code: stubForTarget(target), feedback: feedback.concat(["Validation fallback: " + violations.join(", ")]) };
+          return { code: stubForTarget(target), feedback: normaliseFeedback(feedback.concat(["Validation fallback: " + (violations.join(", ") || "unknown compatibility issue")])) };
         }
         return { code: finalResult.code, feedback };
       });
@@ -1817,6 +1911,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     go.disabled = true;
     go.style.opacity = "0.7";
     go.style.cursor = "not-allowed";
+    let finalFeedback = [];
 
     const runGenerationAttempt = (forcedRequest, forcedDialog, options) => {
       const shouldSnapshot = !options || options.snapshot !== false;
@@ -1909,11 +2004,15 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         })
         .then((result) => {
           throwIfAborted(signal);
-          const feedback = result && Array.isArray(result.feedback) ? result.feedback : [];
-          renderFeedback(feedback);
+          finalFeedback = normaliseFeedback(result && result.feedback);
 
           const code = extractCode(result && result.code ? result.code : "");
           if (!code) {
+            finalFeedback = normaliseFeedback(
+              finalFeedback.concat(["Model returned no code for this request."]),
+              DEFAULT_FEEDBACK_MESSAGE
+            );
+            renderFeedback(finalFeedback);
             setStatus("No code");
             setActivity("No code returned.", "error");
             logLine("No code returned.");
@@ -1929,12 +2028,13 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
               if (!/grey JavaScript block/i.test(message)) throw error;
               logLine("Live decompile check failed: " + message);
               logLine("Applying minimal fallback stub.");
-              const fallbackFeedback = feedback.concat(["Live editor fallback: " + message]);
-              renderFeedback(fallbackFeedback);
+              finalFeedback = normaliseFeedback(finalFeedback.concat(["Live editor fallback: " + message]));
               return pasteToMakeCode(stubForTarget(target), { snapshot: false, signal });
             })
             .then(() => {
               throwIfAborted(signal);
+              finalFeedback = normaliseFeedback(finalFeedback, DEFAULT_FEEDBACK_MESSAGE);
+              renderFeedback(finalFeedback);
               hideFixConvertButton();
               setStatus("Done");
               showDoneAnimation = true;
@@ -1995,6 +2095,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       }
 
       setStatus("Error");
+      finalFeedback = normaliseFeedback(finalFeedback, DEFAULT_FAILURE_FEEDBACK);
+      renderFeedback(finalFeedback);
       setActivity("Generation failed. Check logs.", "error", true);
       logLine("Request failed: " + message);
     };

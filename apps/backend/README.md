@@ -24,7 +24,7 @@ Reference backend for managed mode.
 ```json
 {
   "code": "basic.showIcon(IconNames.Heart)",
-  "feedback": ["Optional feedback line"]
+  "feedback": ["At least one feedback line is always returned"]
 }
 ```
 
