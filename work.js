@@ -288,7 +288,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   interactionOverlay.id = "vibbit-interaction-overlay";
   interactionOverlay.setAttribute("aria-hidden", "true");
   interactionOverlay.innerHTML = ""
-    + '<div id="vibbit-overlay-card" data-mode="working" role="status" aria-live="polite" aria-atomic="true">'
+    + '<div id="vibbit-overlay-card" data-mode="working" role="dialog" aria-modal="true" aria-labelledby="vibbit-overlay-label">'
     + '  <div id="vibbit-overlay-icon-wrap" aria-hidden="true">'
     + '    <svg id="vibbit-overlay-spinner" viewBox="0 0 44 44" fill="none" stroke="#c8d8ff" stroke-width="3">'
     + '      <circle cx="22" cy="22" r="16" stroke-opacity=".22"></circle>'
@@ -299,7 +299,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     + '      <path d="M14 23l6 6 10-12" stroke-linecap="round" stroke-linejoin="round"></path>'
     + '    </svg>'
     + '  </div>'
-    + '  <div id="vibbit-overlay-label">Generating code...</div>'
+    + '  <div id="vibbit-overlay-label" role="status" aria-live="polite" aria-atomic="true">Generating code...</div>'
     + '  <button id="vibbit-overlay-cancel" type="button" style="min-width:84px;height:30px;padding:0 12px;border-radius:999px;border:1px solid rgba(124,153,232,.45);background:#15213f;color:#dbe6ff;font-size:12px;font-weight:600;line-height:1;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;appearance:none;-webkit-appearance:none;cursor:pointer">Cancel</button>'
     + '</div>';
   document.body.appendChild(interactionOverlay);
@@ -481,6 +481,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   let activityTimer = 0;
   let overlayTimer = 0;
   let generationController = null;
+  let lastFocusedElement = null;
 
   const setStatus = (value) => {
     const next = value || "";
@@ -514,6 +515,20 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     if (signal && signal.aborted) throw createAbortError();
   };
 
+  const overlayIsActive = () => interactionOverlay.dataset.active === "true";
+
+  const restoreFocusAfterOverlay = () => {
+    const target = lastFocusedElement;
+    lastFocusedElement = null;
+    if (!target || typeof target.focus !== "function") return;
+    if (!document.contains(target)) return;
+    try {
+      target.focus({ preventScroll: true });
+    } catch (error) {
+      try { target.focus(); } catch (focusError) {}
+    }
+  };
+
   const showInteractionOverlay = () => {
     clearTimeout(overlayTimer);
     overlayCard.dataset.mode = "working";
@@ -523,6 +538,10 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     overlayCancelBtn.style.display = "inline-flex";
     interactionOverlay.dataset.active = "true";
     interactionOverlay.setAttribute("aria-hidden", "false");
+    lastFocusedElement = document.activeElement;
+    requestAnimationFrame(() => {
+      try { overlayCancelBtn.focus({ preventScroll: true }); } catch (error) {}
+    });
   };
 
   const hideInteractionOverlay = (showDoneAnimation) => {
@@ -540,6 +559,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         overlayCancelBtn.textContent = "Cancel";
         overlayCancelBtn.disabled = false;
         overlayCancelBtn.style.display = "inline-flex";
+        restoreFocusAfterOverlay();
       }, 550);
       return;
     }
@@ -550,7 +570,29 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     overlayCancelBtn.textContent = "Cancel";
     overlayCancelBtn.disabled = false;
     overlayCancelBtn.style.display = "inline-flex";
+    restoreFocusAfterOverlay();
   };
+
+  document.addEventListener("focusin", (event) => {
+    if (!overlayIsActive()) return;
+    if (overlayCard.contains(event.target)) return;
+    event.stopPropagation();
+    try { overlayCancelBtn.focus({ preventScroll: true }); } catch (error) {}
+  }, true);
+
+  document.addEventListener("keydown", (event) => {
+    if (!overlayIsActive()) return;
+    const insideOverlay = overlayCard.contains(event.target);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!overlayCancelBtn.disabled) overlayCancelBtn.click();
+      return;
+    }
+    if (insideOverlay) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
 
   overlayCancelBtn.onclick = () => {
     if (!busy || !generationController) return;
@@ -1544,7 +1586,6 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         const code = extractCode(result && result.code ? result.code : "");
         if (!code) {
           setStatus("No code");
-          showDoneAnimation = true;
           setActivity("No code returned.", "error");
           logLine("No code returned.");
           return;
