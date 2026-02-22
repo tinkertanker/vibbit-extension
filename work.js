@@ -889,6 +889,82 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     });
   };
 
+  const normaliseErrorLine = (value, limit) => {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (!text) return "";
+    if (text.length <= (limit || 220)) return text;
+    return text.slice(0, (limit || 220) - 3).trimEnd() + "...";
+  };
+
+  const collectPageErrors = (monacoCtx) => {
+    const out = [];
+    const seen = new Set();
+    const isProbablyVisible = (node) => {
+      try {
+        if (!node || node.nodeType !== 1) return false;
+        const style = window.getComputedStyle(node);
+        if (!style || style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+        return node.getClientRects && node.getClientRects().length > 0;
+      } catch (error) {
+        return false;
+      }
+    };
+    const pushError = (prefix, value) => {
+      const cleaned = normaliseErrorLine(value, 240);
+      if (!cleaned) return;
+      const line = (prefix ? (prefix + ": ") : "") + cleaned;
+      const key = line.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(line);
+    };
+
+    try {
+      const monaco = monacoCtx && monacoCtx.win && monacoCtx.win.monaco;
+      const model = monacoCtx && monacoCtx.model;
+      const markerSeverity = monaco && monaco.MarkerSeverity ? monaco.MarkerSeverity : null;
+      if (monaco && monaco.editor && model && model.uri) {
+        const markers = monaco.editor.getModelMarkers({ resource: model.uri }) || [];
+        for (const marker of markers) {
+          if (!marker) continue;
+          if (markerSeverity && marker.severity !== markerSeverity.Error) continue;
+          const line = marker.startLineNumber ? ("L" + marker.startLineNumber + " - " + marker.message) : marker.message;
+          pushError("Editor", line);
+          if (out.length >= 12) break;
+        }
+      }
+    } catch (error) {
+    }
+
+    try {
+      const selectors = [
+        "[role='alert']",
+        "[aria-live='assertive']",
+        ".error",
+        ".errors",
+        ".notification-error",
+        ".toast-error",
+        ".problem",
+        ".diagnostic",
+        ".warning"
+      ];
+      const nodes = [...document.querySelectorAll(selectors.join(","))];
+      for (const node of nodes) {
+        if (!node || !node.isConnected) continue;
+        if (!isProbablyVisible(node)) continue;
+        const text = normaliseErrorLine(node.innerText || node.textContent || "", 240);
+        if (!text) continue;
+        if (node.closest("#vibbit-panel")) continue;
+        if (!/(error|failed|exception|cannot|can't|invalid|diagnostic|problem|compile)/i.test(text)) continue;
+        pushError("Page", text);
+        if (out.length >= 12) break;
+      }
+    } catch (error) {
+    }
+
+    return out.slice(0, 8);
+  };
+
   const collectBlocklyWorkspaces = (rootWin) => {
     const workspaces = [];
     const queue = [rootWin, window];
@@ -1242,6 +1318,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       "OPTIONAL FEEDBACK: You may send brief notes before the code. Prefix each note with FEEDBACK: .",
       "RESPONSE FORMAT: After any feedback lines, output ONLY Microsoft MakeCode Static TypeScript with no markdown fences or extra prose.",
       "NO COMMENTS inside the code.",
+      "ERROR FIXING: If PAGE_ERRORS are provided, treat them as failing diagnostics and prioritise resolving all of them in your output.",
       "ALLOWED APIS: " + namespaceList + ". Prefer event handlers and forever/update loops.",
       "RANDOMNESS: For random choices, prefer list._pickRandom() from an array of options. Do NOT use randint(...).",
       "BLOCK-SAFE REQUIREMENTS (hard): no grey JavaScript blocks; every variable declaration must have an initializer; for loops must be exactly for (let i = 0; i < limit; i++) or for (let i = 0; i <= limit; i++); event registrations and function declarations must be top-level; no optional/default params in user-defined functions; callbacks/event handlers must not return a value; do not pass more arguments than block signatures support; statement assignment operators are limited to =, +=, -=.",
@@ -1252,12 +1329,17 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     ].join("\n");
   };
 
-  const userFor = (request, currentCode) => {
+  const userFor = (request, currentCode, pageErrors) => {
     const header = "USER_REQUEST:\n" + request.trim();
-    if (currentCode && currentCode.trim().length) {
-      return header + "\n\n<<<CURRENT_CODE>>>\n" + currentCode + "\n<<<END_CURRENT_CODE>>>";
+    const blocks = [header];
+    const errors = (pageErrors || []).filter((item) => item && String(item).trim());
+    if (errors.length) {
+      blocks.push("<<<PAGE_ERRORS>>>\n- " + errors.join("\n- ") + "\n<<<END_PAGE_ERRORS>>>");
     }
-    return header;
+    if (currentCode && currentCode.trim().length) {
+      blocks.push("<<<CURRENT_CODE>>>\n" + currentCode + "\n<<<END_CURRENT_CODE>>>");
+    }
+    return blocks.join("\n\n");
   };
 
   const stubForTarget = (target) => {
@@ -1518,14 +1600,6 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   /* ── generate handler ────────────────────────────────────── */
   go.onclick = () => {
-    const request = (promptEl.value || "").trim();
-    if (!request) {
-      setStatus("Idle");
-      setActivity("Please enter a request.", "error");
-      logLine("Please enter a request.");
-      return;
-    }
-
     if (busy) return;
     busy = true;
     setBusyIndicator(true);
@@ -1538,6 +1612,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     setStatus("Working");
     logLine("Generating...");
 
+    const request = (promptEl.value || "").trim();
     const mode = storageGet(STORAGE_MODE) || "byok";
     const target = storageGet(STORAGE_TARGET) || "microbit";
     const originalText = go.textContent;
@@ -1550,10 +1625,24 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     go.style.opacity = "0.7";
     go.style.cursor = "not-allowed";
 
+    const editorCtxPromise = findMonacoCtx(18000, signal)
+      .then((ctx) => {
+        throwIfAborted(signal);
+        return ctx;
+      })
+      .catch((error) => {
+        if (isAbortError(error) || signal.aborted) throw error;
+        return null;
+      });
+
     const currentPromise = includeCurrent.checked
-      ? findMonacoCtx(18000, signal)
+      ? editorCtxPromise
         .then((ctx) => {
           throwIfAborted(signal);
+          if (!ctx) {
+            logLine("Could not read current code.");
+            return "";
+          }
           logLine("Reading current JavaScript.");
           return ctx.model.getValue() || "";
         })
@@ -1564,12 +1653,40 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         })
       : Promise.resolve("");
 
-    currentPromise
-      .then((currentCode) => {
+    const pageErrorPromise = editorCtxPromise
+      .then((ctx) => {
         throwIfAborted(signal);
+        return collectPageErrors(ctx);
+      })
+      .catch((error) => {
+        if (isAbortError(error) || signal.aborted) throw error;
+        return collectPageErrors(null);
+      });
+
+    Promise.all([currentPromise, pageErrorPromise])
+      .then(([currentCode, pageErrors]) => {
+        throwIfAborted(signal);
+        let effectiveRequest = request;
+
+        if (pageErrors.length) {
+          logLine("Detected page errors (" + pageErrors.length + "):");
+          pageErrors.forEach((line, index) => logLine("  " + (index + 1) + ". " + line));
+        } else {
+          logLine("No page errors detected.");
+        }
+
+        if (!effectiveRequest) {
+          if (!pageErrors.length) {
+            throw new Error("Please enter a request.");
+          }
+          effectiveRequest = "Fix the current project by resolving all listed page errors while preserving existing behaviour unless a change is needed for the fix.";
+          logLine("No prompt entered; using automatic error-fix request.");
+          setActivity("No prompt entered; fixing detected errors.", "neutral", true);
+        }
+
         if (mode === "managed") {
           logLine("Mode: Managed backend.");
-          return requestBackendGenerate({ target, request, currentCode }, signal);
+          return requestBackendGenerate({ target, request: effectiveRequest, currentCode, pageErrors }, signal);
         }
 
         const provider = storageGet(STORAGE_PROVIDER) || "openai";
@@ -1578,7 +1695,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         const model = storageGet(STORAGE_MODEL) || "";
 
         logLine("Mode: BYOK.");
-        return askValidated(provider, apiKey, model, sysFor(target), userFor(request, currentCode), target, signal);
+        return askValidated(provider, apiKey, model, sysFor(target), userFor(effectiveRequest, currentCode, pageErrors), target, signal);
       })
       .then((result) => {
         throwIfAborted(signal);
@@ -1637,9 +1754,18 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
               logLine("Restore after cancellation failed: " + (restoreError && restoreError.message ? restoreError.message : String(restoreError)));
             });
         }
+
+        const message = error && error.message ? error.message : String(error);
+        if (message === "Please enter a request.") {
+          setStatus("Idle");
+          setActivity("Please enter a request.", "error");
+          logLine("Please enter a request.");
+          return;
+        }
+
         setStatus("Error");
         setActivity("Generation failed. Check logs.", "error", true);
-        logLine("Request failed: " + (error && error.message ? error.message : String(error)));
+        logLine("Request failed: " + message);
       })
       .finally(() => {
         generationController = null;
