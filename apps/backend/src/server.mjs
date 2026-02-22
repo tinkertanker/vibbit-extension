@@ -380,6 +380,8 @@ function systemPromptFor(target) {
     "- You may prefix short notes with FEEDBACK: (one per line)",
     "- Then output ONLY MakeCode Static TypeScript, no markdown fences or extra prose",
     "- Straight quotes, ASCII only, real newlines, function () { } handlers",
+    "- If PAGE_ERRORS are provided, treat them as failing diagnostics and prioritise resolving all of them",
+    "- If CONVERSION_DIALOG is provided, ensure the output converts from JavaScript back to Blocks in MakeCode",
     "",
     `TARGET SCOPE: Use ONLY ${config.name} APIs listed above. Never mix APIs from other targets.`,
     "",
@@ -390,12 +392,27 @@ function systemPromptFor(target) {
   ].join("\n");
 }
 
-function userPromptFor(request, currentCode) {
+function userPromptFor(request, currentCode, pageErrors, conversionDialog) {
   const header = "USER_REQUEST:\n" + request.trim();
-  if (currentCode && String(currentCode).trim()) {
-    return header + "\n\n<<<CURRENT_CODE>>>\n" + currentCode + "\n<<<END_CURRENT_CODE>>>";
+  const blocks = [header];
+  const errors = Array.isArray(pageErrors)
+    ? pageErrors.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  if (errors.length) {
+    blocks.push("<<<PAGE_ERRORS>>>\n- " + errors.join("\n- ") + "\n<<<END_PAGE_ERRORS>>>");
   }
-  return header;
+  const dialogTitle = conversionDialog && conversionDialog.title ? String(conversionDialog.title).trim() : "";
+  const dialogDescription = conversionDialog && conversionDialog.description ? String(conversionDialog.description).trim() : "";
+  if (dialogTitle || dialogDescription) {
+    const lines = [];
+    if (dialogTitle) lines.push("Title: " + dialogTitle);
+    if (dialogDescription) lines.push("Message: " + dialogDescription);
+    blocks.push("<<<CONVERSION_DIALOG>>>\n" + lines.join("\n") + "\n<<<END_CONVERSION_DIALOG>>>");
+  }
+  if (currentCode && String(currentCode).trim()) {
+    blocks.push("<<<CURRENT_CODE>>>\n" + currentCode + "\n<<<END_CURRENT_CODE>>>");
+  }
+  return blocks.join("\n\n");
 }
 
 async function callOpenAI(key, model, system, user, signal) {
@@ -475,7 +492,7 @@ async function callGemini(key, model, system, user, signal) {
   return extractGeminiText(data);
 }
 
-async function generateManaged({ target, request, currentCode }) {
+async function generateManaged({ target, request, currentCode, pageErrors, conversionDialog }) {
   const provider = PROVIDER;
   const key = apiKeyFor(provider);
   const model = modelFor(provider);
@@ -485,7 +502,7 @@ async function generateManaged({ target, request, currentCode }) {
   }
 
   const system = systemPromptFor(target);
-  const user = userPromptFor(request, currentCode || "");
+  const user = userPromptFor(request, currentCode || "", pageErrors || [], conversionDialog || null);
   const callProvider = async (systemPrompt) => withTimeout(async (signal) => {
     if (provider === "openai") return callOpenAI(key, model, systemPrompt, user, signal);
     if (provider === "gemini") return callGemini(key, model, systemPrompt, user, signal);
@@ -546,6 +563,20 @@ function validatePayload(payload) {
   const target = payload && typeof payload.target === "string" ? payload.target.trim() : "";
   const request = payload && typeof payload.request === "string" ? payload.request.trim() : "";
   const currentCode = payload && typeof payload.currentCode === "string" ? payload.currentCode : "";
+  const rawPageErrors = payload && Array.isArray(payload.pageErrors) ? payload.pageErrors : [];
+  const pageErrors = rawPageErrors
+    .map((item) => String(item || "").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  const rawConversionDialog = payload && payload.conversionDialog && typeof payload.conversionDialog === "object"
+    ? payload.conversionDialog
+    : null;
+  const conversionDialog = rawConversionDialog
+    ? {
+      title: String(rawConversionDialog.title || "").replace(/\s+/g, " ").trim().slice(0, 220),
+      description: String(rawConversionDialog.description || "").replace(/\s+/g, " ").trim().slice(0, 320)
+    }
+    : null;
 
   if (!request) {
     return { ok: false, error: "'request' is required" };
@@ -558,7 +589,9 @@ function validatePayload(payload) {
     value: {
       target: safeTarget,
       request,
-      currentCode
+      currentCode,
+      pageErrors,
+      conversionDialog
     }
   };
 }

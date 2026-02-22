@@ -16,6 +16,8 @@ This repository provides the `Vibbit` panel for MakeCode micro:bit and supports 
   - `target`: `microbit | arcade | maker`
   - `request`: natural-language prompt
   - `currentCode`: optional current editor code
+  - `pageErrors`: optional array of visible/editor error diagnostics detected on page
+  - `conversionDialog`: optional conversion-modal snapshot (`title`, `description`) when MakeCode reports JS -> Blocks failure
 
 ### BYOK mode
 
@@ -45,7 +47,7 @@ This repository provides the `Vibbit` panel for MakeCode micro:bit and supports 
 ### Managed mode
 
 - Uses `BACKEND` + optional `APP_TOKEN`
-- Sends `target`, `request`, and optional `currentCode` to `/vibbit/generate`
+- Sends `target`, `request`, optional `currentCode`, optional `pageErrors`, and optional `conversionDialog` to `/vibbit/generate`
 - Best for centrally managed roll-outs
 
 ### BYOK mode
@@ -53,6 +55,8 @@ This repository provides the `Vibbit` panel for MakeCode micro:bit and supports 
 - School chooses provider (`OpenAI`, `Gemini`, `OpenRouter`)
 - School supplies model + API key in the panel
 - Key is stored in browser local storage for convenience
+- Automatically includes detected editor/page errors in the model prompt to help targeted fixes
+- When MakeCode shows the conversion-failure modal, Vibbit auto-retries once and then offers `Fix convert error`
 - Useful when teams prefer to use their own billing and policy setup
 
 ## Configure defaults
@@ -143,10 +147,12 @@ This builds first, then creates:
    - choose `Managed`
    - enter a simple prompt
    - confirm code is generated and pasted, then test `Revert`
+   - introduce a compile error, then run generation with an empty prompt and confirm Vibbit attempts an error-fix request
+   - trigger the `problem converting your code` modal and confirm Vibbit retries once, then shows `Fix convert error` if needed
 6. BYOK smoke test:
    - switch to `Bring your own key`
    - select provider + model, enter key
-   - confirm generation and paste both work
+   - confirm generation, paste, and error-context fixing all work
 7. If updating config values (`VIBBIT_BACKEND` or `VIBBIT_APP_TOKEN`), rebuild and reload the extension.
 8. After reloading the extension, refresh any open MakeCode tabs before testing again.
 

@@ -187,6 +187,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     + '    <button id="go" style="flex:1 1 auto;padding:10px;border:none;border-radius:8px;background:#3454D1;color:#fff;font-weight:600;cursor:pointer">Generate</button>'
     + '    <button id="revert" aria-label="Revert to previous code" title="Revert to previous code" style="width:38px;height:38px;display:none;align-items:center;justify-content:center;border:1px solid #2b3a5a;border-radius:999px;background:#1a2745;color:#d6e4ff;cursor:pointer" disabled><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.5H8a4.5 4.5 0 1 1-4.5 4.5"/><path d="M3.5 4.5L6 2"/><path d="M3.5 4.5 6 7"/></svg></button>'
     + '  </div>'
+    + '  <button id="fix-convert" style="display:none;padding:8px 10px;border:1px solid #3b4c76;border-radius:8px;background:#17233f;color:#d6e4ff;font-size:12px;font-weight:600;cursor:pointer">Fix convert error</button>'
     + '  <div id="activity" style="min-height:18px;font-size:12px;line-height:1.2;color:#9bb1dd" aria-live="polite"></div>'
     + '</div>'
 
@@ -394,6 +395,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const includeCurrent = $("#inc");
   const go = $("#go");
   const revertBtn = $("#revert");
+  const fixConvertBtn = $("#fix-convert");
   const activityEl = $("#activity");
   const logToggle = $("#logToggle");
   const log = $("#log");
@@ -482,6 +484,9 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   let overlayTimer = 0;
   let generationController = null;
   let lastFocusedElement = null;
+  let queuedForcedRequest = "";
+  let queuedForcedDialog = null;
+  let lastConversionDialog = null;
 
   const setStatus = (value) => {
     const next = value || "";
@@ -513,6 +518,48 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   const throwIfAborted = (signal) => {
     if (signal && signal.aborted) throw createAbortError();
+  };
+
+  const createConversionDialogError = (dialog) => {
+    const error = new Error("MakeCode could not convert generated JavaScript to Blocks.");
+    error.code = "E_BLOCKS_CONVERT_DIALOG";
+    error.dialog = dialog || null;
+    return error;
+  };
+
+  const isConversionDialogError = (error) => {
+    if (!error) return false;
+    if (error.code === "E_BLOCKS_CONVERT_DIALOG") return true;
+    const message = error && error.message ? String(error.message) : String(error);
+    return /convert.+blocks|problem converting/i.test(message);
+  };
+
+  const buildConversionFixRequest = (dialog) => {
+    const lines = [
+      "Fix the current JavaScript so MakeCode can convert it to Blocks.",
+      "Preserve intended behaviour and remove syntax or unsupported constructs causing conversion failure."
+    ];
+    const title = dialog && dialog.title ? String(dialog.title).trim() : "";
+    const description = dialog && dialog.description ? String(dialog.description).trim() : "";
+    if (title) lines.push("Conversion dialog title: " + title);
+    if (description) lines.push("Conversion dialog detail: " + description);
+    return lines.join(" ");
+  };
+
+  const hideFixConvertButton = () => {
+    fixConvertBtn.style.display = "none";
+    fixConvertBtn.disabled = true;
+    fixConvertBtn.setAttribute("aria-hidden", "true");
+  };
+
+  const showFixConvertButton = (dialog) => {
+    lastConversionDialog = dialog || null;
+    fixConvertBtn.textContent = "Fix convert error";
+    fixConvertBtn.style.display = "inline-flex";
+    fixConvertBtn.disabled = busy;
+    fixConvertBtn.style.opacity = busy ? "0.65" : "1";
+    fixConvertBtn.style.cursor = busy ? "default" : "pointer";
+    fixConvertBtn.setAttribute("aria-hidden", "false");
   };
 
   const overlayIsActive = () => interactionOverlay.dataset.active === "true";
@@ -628,6 +675,11 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     revertBtn.style.pointerEvents = canRevert ? "auto" : "none";
     revertBtn.style.cursor = canRevert ? "pointer" : "default";
     revertBtn.setAttribute("aria-hidden", canRevert ? "false" : "true");
+    if (fixConvertBtn.style.display !== "none") {
+      fixConvertBtn.disabled = busy;
+      fixConvertBtn.style.opacity = busy ? "0.65" : "1";
+      fixConvertBtn.style.cursor = busy ? "default" : "pointer";
+    }
   };
 
   const applyLogCollapse = () => {
@@ -694,11 +746,19 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     feedbackCollapsed = !feedbackCollapsed;
     applyFeedbackCollapse();
   };
+  fixConvertBtn.onclick = () => {
+    if (busy) return;
+    queuedForcedDialog = lastConversionDialog || null;
+    queuedForcedRequest = buildConversionFixRequest(queuedForcedDialog);
+    setActivity("Fixing conversion error...", "neutral", true);
+    go.onclick();
+  };
   logToggle.onclick = () => {
     logsCollapsed = !logsCollapsed;
     applyLogCollapse();
   };
   applyLogCollapse();
+  hideFixConvertButton();
   setBusyIndicator(false);
   refreshRevertButton();
 
@@ -889,6 +949,168 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     });
   };
 
+  const normaliseErrorLine = (value, limit) => {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (!text) return "";
+    if (text.length <= (limit || 220)) return text;
+    return text.slice(0, (limit || 220) - 3).trimEnd() + "...";
+  };
+
+  const collectCandidateDocs = (monacoCtx) => {
+    const docs = [];
+    const pushDoc = (doc) => {
+      if (!doc) return;
+      if (docs.includes(doc)) return;
+      docs.push(doc);
+    };
+    try { pushDoc(document); } catch (error) {}
+    try { pushDoc(monacoCtx && monacoCtx.win && monacoCtx.win.document); } catch (error) {}
+    return docs;
+  };
+
+  const findConversionDialogInDoc = (doc) => {
+    if (!doc) return null;
+    const dialogNodes = [...doc.querySelectorAll(".ReactModal__Content[role='dialog'][aria-modal='true'], .coredialog[role='dialog'][aria-modal='true'], .ui.modal[role='dialog'][aria-modal='true']")];
+    for (const dialogNode of dialogNodes) {
+      const titleNode = dialogNode.querySelector(".header-title, .header h3");
+      const descNode = dialogNode.querySelector(".content p");
+      const stayButton = dialogNode.querySelector("button[aria-label*='Stay in JavaScript'],button.positive");
+      const discardButton = dialogNode.querySelector("button[aria-label*='Discard'][aria-label*='Blocks'],button.cancel");
+      const title = normaliseErrorLine(titleNode ? (titleNode.innerText || titleNode.textContent || "") : "", 180);
+      const description = normaliseErrorLine(descNode ? (descNode.innerText || descNode.textContent || "") : "", 260);
+      const combined = (title + " " + description).toLowerCase();
+      const looksLikeConversionDialog = /problem converting|unable to convert.+back to blocks|go back to the previous blocks/i.test(combined)
+        || (Boolean(stayButton) && Boolean(discardButton) && /convert|blocks/i.test(combined));
+      if (!looksLikeConversionDialog) continue;
+      return {
+        node: dialogNode,
+        title,
+        description,
+        stayButton,
+        discardButton
+      };
+    }
+    return null;
+  };
+
+  const detectConversionDialog = (monacoCtx) => {
+    const docs = collectCandidateDocs(monacoCtx);
+    for (const doc of docs) {
+      try {
+        const found = findConversionDialogInDoc(doc);
+        if (!found) continue;
+        return {
+          title: found.title,
+          description: found.description
+        };
+      } catch (error) {
+      }
+    }
+    return null;
+  };
+
+  const dismissConversionDialogByStaying = (monacoCtx) => {
+    const docs = collectCandidateDocs(monacoCtx);
+    for (const doc of docs) {
+      try {
+        const found = findConversionDialogInDoc(doc);
+        if (!found || !found.stayButton) continue;
+        found.stayButton.click();
+        return true;
+      } catch (error) {
+      }
+    }
+    return false;
+  };
+
+  const collectPageContext = (monacoCtx) => {
+    const out = [];
+    const seen = new Set();
+    const isProbablyVisible = (node) => {
+      try {
+        if (!node || node.nodeType !== 1) return false;
+        const owner = node.ownerDocument || document;
+        const view = owner.defaultView || window;
+        const style = view.getComputedStyle(node);
+        if (!style || style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+        return node.getClientRects && node.getClientRects().length > 0;
+      } catch (error) {
+        return false;
+      }
+    };
+    const pushError = (prefix, value) => {
+      const cleaned = normaliseErrorLine(value, 240);
+      if (!cleaned) return;
+      const line = (prefix ? (prefix + ": ") : "") + cleaned;
+      const key = line.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(line);
+    };
+
+    let conversionDialog = null;
+    try {
+      conversionDialog = detectConversionDialog(monacoCtx);
+      if (conversionDialog) {
+        if (conversionDialog.title) pushError("ConvertDialog", conversionDialog.title);
+        if (conversionDialog.description) pushError("ConvertDialog", conversionDialog.description);
+      }
+    } catch (error) {
+    }
+
+    try {
+      const monaco = monacoCtx && monacoCtx.win && monacoCtx.win.monaco;
+      const model = monacoCtx && monacoCtx.model;
+      const markerSeverity = monaco && monaco.MarkerSeverity ? monaco.MarkerSeverity : null;
+      if (monaco && monaco.editor && model && model.uri) {
+        const markers = monaco.editor.getModelMarkers({ resource: model.uri }) || [];
+        for (const marker of markers) {
+          if (!marker) continue;
+          if (markerSeverity && marker.severity !== markerSeverity.Error) continue;
+          const line = marker.startLineNumber ? ("L" + marker.startLineNumber + " - " + marker.message) : marker.message;
+          pushError("Editor", line);
+          if (out.length >= 12) break;
+        }
+      }
+    } catch (error) {
+    }
+
+    try {
+      const selectors = [
+        "[role='alert']",
+        "[aria-live='assertive']",
+        ".error",
+        ".errors",
+        ".notification-error",
+        ".toast-error",
+        ".problem",
+        ".diagnostic",
+        ".warning"
+      ];
+      const docs = collectCandidateDocs(monacoCtx);
+      for (const doc of docs) {
+        const nodes = [...doc.querySelectorAll(selectors.join(","))];
+        for (const node of nodes) {
+          if (!node || !node.isConnected) continue;
+          if (!isProbablyVisible(node)) continue;
+          const text = normaliseErrorLine(node.innerText || node.textContent || "", 240);
+          if (!text) continue;
+          if (node.closest("#vibbit-panel")) continue;
+          if (!/(error|failed|exception|cannot|can't|invalid|diagnostic|problem|compile)/i.test(text)) continue;
+          pushError("Page", text);
+          if (out.length >= 12) break;
+        }
+        if (out.length >= 12) break;
+      }
+    } catch (error) {
+    }
+
+    return {
+      errors: out.slice(0, 8),
+      conversionDialog: conversionDialog || null
+    };
+  };
+
   const collectBlocklyWorkspaces = (rootWin) => {
     const workspaces = [];
     const queue = [rootWin, window];
@@ -962,7 +1184,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return { checked: true, ok: true, greyBlocks: 0, snippets };
   };
 
-  const waitForDecompileProbe = (rootWin, timeoutMs = 6000, signal) => {
+  const waitForDecompileProbe = (monacoCtx, timeoutMs = 6000, signal) => {
+    const rootWin = monacoCtx && monacoCtx.win ? monacoCtx.win : monacoCtx;
     const deadline = performance.now() + timeoutMs;
     const startedAt = performance.now();
     const minSettleMs = 1500;
@@ -970,11 +1193,25 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return new Promise((resolve) => {
       let lastSignature = "";
       let stableReads = 0;
-      let lastReport = { checked: false, ok: true, greyBlocks: 0, reason: "Blockly workspace unavailable" };
+      let lastReport = { checked: false, ok: true, greyBlocks: 0, reason: "Blockly workspace unavailable", conversionDialog: null };
       (function poll() {
         if (signal && signal.aborted) {
           resolve({ checked: true, ok: false, greyBlocks: 0, reason: "Generation cancelled before decompile check." });
           return;
+        }
+        try {
+          const conversionDialog = detectConversionDialog(monacoCtx);
+          if (conversionDialog) {
+            resolve({
+              checked: true,
+              ok: false,
+              greyBlocks: 0,
+              reason: "MakeCode could not convert JavaScript back to Blocks.",
+              conversionDialog
+            });
+            return;
+          }
+        } catch (error) {
         }
         const report = inspectGreyBlocks(rootWin);
         lastReport = report;
@@ -1041,8 +1278,25 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
             return clickLike(ctx.win.document, ["blocks"]);
           }
         })();
-        return waitWithAbort(120, signal).then(() => waitForDecompileProbe(ctx.win, 6000, signal)).then((probe) => {
+        return waitWithAbort(120, signal).then(() => {
+          const conversionDialog = detectConversionDialog(ctx);
+          if (conversionDialog) {
+            logLine("MakeCode conversion dialog detected: " + (conversionDialog.title || "Cannot convert to Blocks."));
+            if (dismissConversionDialogByStaying(ctx)) {
+              logLine("Chose 'Stay in JavaScript' to preserve code for repair.");
+            }
+            throw createConversionDialogError(conversionDialog);
+          }
+          return waitForDecompileProbe(ctx, 6000, signal);
+        }).then((probe) => {
           throwIfAborted(signal);
+          if (probe && probe.conversionDialog) {
+            logLine("MakeCode conversion dialog detected: " + (probe.conversionDialog.title || "Cannot convert to Blocks."));
+            if (dismissConversionDialogByStaying(ctx)) {
+              logLine("Chose 'Stay in JavaScript' to preserve code for repair.");
+            }
+            throw createConversionDialogError(probe.conversionDialog);
+          }
           if (!probe.checked) {
             logLine("Live decompile check unavailable in this session.");
             return;
@@ -1242,6 +1496,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       "OPTIONAL FEEDBACK: You may send brief notes before the code. Prefix each note with FEEDBACK: .",
       "RESPONSE FORMAT: After any feedback lines, output ONLY Microsoft MakeCode Static TypeScript with no markdown fences or extra prose.",
       "NO COMMENTS inside the code.",
+      "ERROR FIXING: If PAGE_ERRORS are provided, treat them as failing diagnostics and prioritise resolving all of them in your output.",
+      "BLOCKS CONVERSION: If CONVERSION_DIALOG is provided, ensure the output can be converted from JavaScript back to Blocks in MakeCode.",
       "ALLOWED APIS: " + namespaceList + ". Prefer event handlers and forever/update loops.",
       "RANDOMNESS: For random choices, prefer list._pickRandom() from an array of options. Do NOT use randint(...).",
       "BLOCK-SAFE REQUIREMENTS (hard): no grey JavaScript blocks; every variable declaration must have an initializer; for loops must be exactly for (let i = 0; i < limit; i++) or for (let i = 0; i <= limit; i++); event registrations and function declarations must be top-level; no optional/default params in user-defined functions; callbacks/event handlers must not return a value; do not pass more arguments than block signatures support; statement assignment operators are limited to =, +=, -=.",
@@ -1252,12 +1508,25 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     ].join("\n");
   };
 
-  const userFor = (request, currentCode) => {
+  const userFor = (request, currentCode, pageErrors, conversionDialog) => {
     const header = "USER_REQUEST:\n" + request.trim();
-    if (currentCode && currentCode.trim().length) {
-      return header + "\n\n<<<CURRENT_CODE>>>\n" + currentCode + "\n<<<END_CURRENT_CODE>>>";
+    const blocks = [header];
+    const errors = (pageErrors || []).filter((item) => item && String(item).trim());
+    if (errors.length) {
+      blocks.push("<<<PAGE_ERRORS>>>\n- " + errors.join("\n- ") + "\n<<<END_PAGE_ERRORS>>>");
     }
-    return header;
+    const dialogTitle = conversionDialog && conversionDialog.title ? String(conversionDialog.title).trim() : "";
+    const dialogDescription = conversionDialog && conversionDialog.description ? String(conversionDialog.description).trim() : "";
+    if (dialogTitle || dialogDescription) {
+      const lines = [];
+      if (dialogTitle) lines.push("Title: " + dialogTitle);
+      if (dialogDescription) lines.push("Message: " + dialogDescription);
+      blocks.push("<<<CONVERSION_DIALOG>>>\n" + lines.join("\n") + "\n<<<END_CONVERSION_DIALOG>>>");
+    }
+    if (currentCode && currentCode.trim().length) {
+      blocks.push("<<<CURRENT_CODE>>>\n" + currentCode + "\n<<<END_CURRENT_CODE>>>");
+    }
+    return blocks.join("\n\n");
   };
 
   const stubForTarget = (target) => {
@@ -1518,14 +1787,6 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   /* ── generate handler ────────────────────────────────────── */
   go.onclick = () => {
-    const request = (promptEl.value || "").trim();
-    if (!request) {
-      setStatus("Idle");
-      setActivity("Please enter a request.", "error");
-      logLine("Please enter a request.");
-      return;
-    }
-
     if (busy) return;
     busy = true;
     setBusyIndicator(true);
@@ -1535,9 +1796,15 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
     clearLog();
     renderFeedback([]);
+    hideFixConvertButton();
     setStatus("Working");
     logLine("Generating...");
 
+    const request = (promptEl.value || "").trim();
+    const initialForcedRequest = queuedForcedRequest;
+    const initialForcedDialog = queuedForcedDialog;
+    queuedForcedRequest = "";
+    queuedForcedDialog = null;
     const mode = storageGet(STORAGE_MODE) || "byok";
     const target = storageGet(STORAGE_TARGET) || "microbit";
     const originalText = go.textContent;
@@ -1545,102 +1812,195 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     generationController = new AbortController();
     const signal = generationController.signal;
     let showDoneAnimation = false;
+    let conversionRetryCount = 0;
     go.textContent = "Generating...";
     go.disabled = true;
     go.style.opacity = "0.7";
     go.style.cursor = "not-allowed";
 
-    const currentPromise = includeCurrent.checked
-      ? findMonacoCtx(18000, signal)
+    const runGenerationAttempt = (forcedRequest, forcedDialog, options) => {
+      const shouldSnapshot = !options || options.snapshot !== false;
+      const editorCtxPromise = findMonacoCtx(18000, signal)
         .then((ctx) => {
           throwIfAborted(signal);
-          logLine("Reading current JavaScript.");
-          return ctx.model.getValue() || "";
+          return ctx;
         })
         .catch((error) => {
           if (isAbortError(error) || signal.aborted) throw error;
-          logLine("Could not read current code.");
-          return "";
-        })
-      : Promise.resolve("");
+          return null;
+        });
 
-    currentPromise
-      .then((currentCode) => {
-        throwIfAborted(signal);
-        if (mode === "managed") {
-          logLine("Mode: Managed backend.");
-          return requestBackendGenerate({ target, request, currentCode }, signal);
-        }
-
-        const provider = storageGet(STORAGE_PROVIDER) || "openai";
-        const apiKey = getStoredProviderKey(provider).trim();
-        if (!apiKey) throw new Error("Enter API key for BYOK mode (open Settings).");
-        const model = storageGet(STORAGE_MODEL) || "";
-
-        logLine("Mode: BYOK.");
-        return askValidated(provider, apiKey, model, sysFor(target), userFor(request, currentCode), target, signal);
-      })
-      .then((result) => {
-        throwIfAborted(signal);
-        const feedback = result && Array.isArray(result.feedback) ? result.feedback : [];
-        renderFeedback(feedback);
-
-        const code = extractCode(result && result.code ? result.code : "");
-        if (!code) {
-          setStatus("No code");
-          setActivity("No code returned.", "error");
-          logLine("No code returned.");
-          return;
-        }
-
-        setStatus("Pasting");
-        return pasteToMakeCode(code, { signal })
-          .catch((error) => {
+      const currentPromise = includeCurrent.checked
+        ? editorCtxPromise
+          .then((ctx) => {
             throwIfAborted(signal);
-            const message = error && error.message ? error.message : String(error);
-            if (!/grey JavaScript block/i.test(message)) throw error;
-            logLine("Live decompile check failed: " + message);
-            logLine("Applying minimal fallback stub.");
-            const fallbackFeedback = feedback.concat(["Live editor fallback: " + message]);
-            renderFeedback(fallbackFeedback);
-            return pasteToMakeCode(stubForTarget(target), { snapshot: false, signal });
+            if (!ctx) {
+              logLine("Could not read current code.");
+              return "";
+            }
+            logLine("Reading current JavaScript.");
+            return ctx.model.getValue() || "";
           })
-          .then(() => {
-            throwIfAborted(signal);
-            setStatus("Done");
-            showDoneAnimation = true;
-            setActivity("Generation complete.", "success");
-            logLine("Pasted and switched back to Blocks.");
-          });
-      })
-      .catch((error) => {
-        if (isAbortError(error) || signal.aborted) {
-          const shouldRestore = undoStack.length > undoDepthBeforeGenerate;
-          if (!shouldRestore) {
-            setStatus("Cancelled");
-            setActivity("Generation cancelled.", "neutral");
-            logLine("Generation cancelled.");
+          .catch((error) => {
+            if (isAbortError(error) || signal.aborted) throw error;
+            logLine("Could not read current code.");
+            return "";
+          })
+        : Promise.resolve("");
+
+      const pageContextPromise = editorCtxPromise
+        .then((ctx) => {
+          throwIfAborted(signal);
+          return collectPageContext(ctx);
+        })
+        .catch((error) => {
+          if (isAbortError(error) || signal.aborted) throw error;
+          return collectPageContext(null);
+        });
+
+      return Promise.all([currentPromise, pageContextPromise])
+        .then(([currentCode, pageContext]) => {
+          throwIfAborted(signal);
+          const pageErrors = pageContext && Array.isArray(pageContext.errors) ? pageContext.errors.slice() : [];
+          let conversionDialog = (pageContext && pageContext.conversionDialog) || forcedDialog || null;
+          if (conversionDialog) {
+            lastConversionDialog = conversionDialog;
+            const hasDialogPrefix = pageErrors.some((line) => /^ConvertDialog:/i.test(String(line)));
+            if (!hasDialogPrefix) {
+              if (conversionDialog.title) pageErrors.push("ConvertDialog: " + conversionDialog.title);
+              if (conversionDialog.description) pageErrors.push("ConvertDialog: " + conversionDialog.description);
+            }
+          }
+
+          if (pageErrors.length) {
+            logLine("Detected page errors (" + pageErrors.length + "):");
+            pageErrors.forEach((line, index) => logLine("  " + (index + 1) + ". " + line));
+          } else {
+            logLine("No page errors detected.");
+          }
+
+          let effectiveRequest = (forcedRequest || "").trim() || request;
+          if (!effectiveRequest) {
+            if (!pageErrors.length && !conversionDialog) {
+              throw new Error("Please enter a request.");
+            }
+            if (conversionDialog) {
+              effectiveRequest = buildConversionFixRequest(conversionDialog);
+              logLine("No prompt entered; using conversion-fix request.");
+            } else {
+              effectiveRequest = "Fix the current project by resolving all listed page errors while preserving existing behaviour unless a change is needed for the fix.";
+              logLine("No prompt entered; using automatic error-fix request.");
+            }
+            setActivity("No prompt entered; fixing detected errors.", "neutral", true);
+          }
+
+          if (mode === "managed") {
+            logLine("Mode: Managed backend.");
+            return requestBackendGenerate({ target, request: effectiveRequest, currentCode, pageErrors, conversionDialog }, signal);
+          }
+
+          const provider = storageGet(STORAGE_PROVIDER) || "openai";
+          const apiKey = getStoredProviderKey(provider).trim();
+          if (!apiKey) throw new Error("Enter API key for BYOK mode (open Settings).");
+          const model = storageGet(STORAGE_MODEL) || "";
+
+          logLine("Mode: BYOK.");
+          return askValidated(provider, apiKey, model, sysFor(target), userFor(effectiveRequest, currentCode, pageErrors, conversionDialog), target, signal);
+        })
+        .then((result) => {
+          throwIfAborted(signal);
+          const feedback = result && Array.isArray(result.feedback) ? result.feedback : [];
+          renderFeedback(feedback);
+
+          const code = extractCode(result && result.code ? result.code : "");
+          if (!code) {
+            setStatus("No code");
+            setActivity("No code returned.", "error");
+            logLine("No code returned.");
             return;
           }
-          setStatus("Cancelling");
-          setActivity("Generation cancelled. Restoring previous code...", "neutral", true);
-          logLine("Generation cancelled after code updates. Restoring previous snapshot...");
-          return revertEditor()
-            .then(() => {
-              setStatus("Cancelled");
-              setActivity("Generation cancelled. Previous code restored.", "neutral");
-              logLine("Previous code restored after cancellation.");
+
+          setStatus("Pasting");
+          return pasteToMakeCode(code, { signal, snapshot: shouldSnapshot })
+            .catch((error) => {
+              throwIfAborted(signal);
+              if (isConversionDialogError(error)) throw error;
+              const message = error && error.message ? error.message : String(error);
+              if (!/grey JavaScript block/i.test(message)) throw error;
+              logLine("Live decompile check failed: " + message);
+              logLine("Applying minimal fallback stub.");
+              const fallbackFeedback = feedback.concat(["Live editor fallback: " + message]);
+              renderFeedback(fallbackFeedback);
+              return pasteToMakeCode(stubForTarget(target), { snapshot: false, signal });
             })
-            .catch((restoreError) => {
-              setStatus("Error");
-              setActivity("Generation cancelled but restore failed. Check logs.", "error", true);
-              logLine("Restore after cancellation failed: " + (restoreError && restoreError.message ? restoreError.message : String(restoreError)));
+            .then(() => {
+              throwIfAborted(signal);
+              hideFixConvertButton();
+              setStatus("Done");
+              showDoneAnimation = true;
+              setActivity("Generation complete.", "success");
+              logLine("Pasted and switched back to Blocks.");
             });
+        });
+    };
+
+    const handleGenerationFailure = (error) => {
+      if (isAbortError(error) || signal.aborted) {
+        const shouldRestore = undoStack.length > undoDepthBeforeGenerate;
+        if (!shouldRestore) {
+          setStatus("Cancelled");
+          setActivity("Generation cancelled.", "neutral");
+          logLine("Generation cancelled.");
+          return;
         }
-        setStatus("Error");
-        setActivity("Generation failed. Check logs.", "error", true);
-        logLine("Request failed: " + (error && error.message ? error.message : String(error)));
-      })
+        setStatus("Cancelling");
+        setActivity("Generation cancelled. Restoring previous code...", "neutral", true);
+        logLine("Generation cancelled after code updates. Restoring previous snapshot...");
+        return revertEditor()
+          .then(() => {
+            setStatus("Cancelled");
+            setActivity("Generation cancelled. Previous code restored.", "neutral");
+            logLine("Previous code restored after cancellation.");
+          })
+          .catch((restoreError) => {
+            setStatus("Error");
+            setActivity("Generation cancelled but restore failed. Check logs.", "error", true);
+            logLine("Restore after cancellation failed: " + (restoreError && restoreError.message ? restoreError.message : String(restoreError)));
+          });
+      }
+
+      if (isConversionDialogError(error)) {
+        const dialog = (error && error.dialog) || lastConversionDialog || null;
+        lastConversionDialog = dialog;
+        if (conversionRetryCount < 1) {
+          conversionRetryCount += 1;
+          logLine("MakeCode could not convert to Blocks. Retrying once with a conversion-fix prompt.");
+          setStatus("Retrying");
+          setActivity("MakeCode couldn't convert to Blocks. Attempting auto-fix...", "neutral", true);
+          return runGenerationAttempt(buildConversionFixRequest(dialog), dialog, { snapshot: false }).catch(handleGenerationFailure);
+        }
+        showFixConvertButton(dialog);
+        setStatus("Needs fix");
+        setActivity("Still cannot convert to Blocks. Click \"Fix convert error\".", "error", true);
+        logLine("Still unable to convert to Blocks after retry. Use 'Fix convert error' to try again.");
+        return;
+      }
+
+      const message = error && error.message ? error.message : String(error);
+      if (message === "Please enter a request.") {
+        setStatus("Idle");
+        setActivity("Please enter a request.", "error");
+        logLine("Please enter a request.");
+        return;
+      }
+
+      setStatus("Error");
+      setActivity("Generation failed. Check logs.", "error", true);
+      logLine("Request failed: " + message);
+    };
+
+    runGenerationAttempt(initialForcedRequest, initialForcedDialog)
+      .catch(handleGenerationFailure)
       .finally(() => {
         generationController = null;
         busy = false;
