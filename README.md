@@ -81,6 +81,10 @@ Supported hosted deployment target:
 
 - Railway
 
+Deploy button (placeholder until template is published):
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/REPLACE_WITH_TEMPLATE_CODE?utm_medium=integration&utm_source=button&utm_campaign=vibbit)
+
 See full backend setup and env docs here:
 
 - `apps/backend/README.md`

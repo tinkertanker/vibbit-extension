@@ -154,6 +154,10 @@ Provider keys/models:
 
 Railway is the supported hosted deployment target for this backend.
 
+Deploy button (placeholder until template is published):
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/REPLACE_WITH_TEMPLATE_CODE?utm_medium=integration&utm_source=button&utm_campaign=vibbit)
+
 ### Deploy from GitHub (recommended)
 
 1. Open [Railway New Project](https://railway.com/new) and choose **Deploy from GitHub repo**.
