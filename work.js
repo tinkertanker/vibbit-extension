@@ -1032,8 +1032,13 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   /* preview bar buttons */
   previewReturnBtn.onclick = exitPreview;
+  const confirmStartNewChat = () => {
+    if (!undoStack.length) return true;
+    return window.confirm("Start a new chat? This will clear undo history.");
+  };
   previewNewBtn.onclick = () => {
     if (busy) return;
+    if (!confirmStartNewChat()) return;
     previewBar.style.display = "none";
     clearChat();
     freshStartOnNextSend = true;
@@ -1044,6 +1049,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   /* new chat button */
   newChatBtn.onclick = () => {
     if (busy) return;
+    if (!confirmStartNewChat()) return;
     clearChat();
     freshStartOnNextSend = true;
     logLine("New chat started. Next send will start from scratch.");
