@@ -36,6 +36,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const STORAGE_SETUP_DONE = "__vibbit_setup_done";
   const STORAGE_SERVER = "__vibbit_server";
   const STORAGE_TARGET = "__vibbit_target";
+  const STORAGE_CHAT_HISTORY = "__vibbit_chat_history_v1";
 
   const MODEL_PRESETS = {
     openai: [
@@ -577,6 +578,76 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const refreshRevertButton = () => {};
 
   /* ── chat rendering ────────────────────────────────────── */
+  const CHAT_HISTORY_SCHEMA_VERSION = 1;
+  const CHAT_HISTORY_MAX_MESSAGES = 50;
+  const CHAT_HISTORY_MAX_CONTENT_CHARS = 4000;
+  const CHAT_HISTORY_MAX_FEEDBACK_LINES = 6;
+  const CHAT_HISTORY_MAX_FEEDBACK_CHARS = 320;
+  const CHAT_HISTORY_TRUNCATION_SUFFIX = " [truncated]";
+
+  const clampStoredText = (value, maxChars) => {
+    const text = String(value || "");
+    if (!maxChars || maxChars < 1 || text.length <= maxChars) return text;
+    if (maxChars <= CHAT_HISTORY_TRUNCATION_SUFFIX.length + 1) {
+      return text.slice(0, maxChars);
+    }
+    return text.slice(0, maxChars - CHAT_HISTORY_TRUNCATION_SUFFIX.length).trimEnd() + CHAT_HISTORY_TRUNCATION_SUFFIX;
+  };
+
+  const normaliseChatMessage = (msg) => {
+    if (!msg || (msg.role !== "user" && msg.role !== "assistant")) return null;
+
+    if (msg.role === "user") {
+      const content = clampStoredText(msg.content, CHAT_HISTORY_MAX_CONTENT_CHARS).trim();
+      if (!content) return null;
+      return { role: "user", content };
+    }
+
+    const allowedStatuses = {
+      generating: true,
+      done: true,
+      error: true,
+      cancelled: true,
+      "convert-error": true
+    };
+
+    const out = { role: "assistant" };
+    const status = typeof msg.status === "string" ? msg.status : "";
+    out.status = allowedStatuses[status] ? status : "cancelled";
+
+    const content = clampStoredText(msg.content, CHAT_HISTORY_MAX_CONTENT_CHARS).trim();
+    if (content) out.content = content;
+
+    if (Array.isArray(msg.feedback)) {
+      const feedback = msg.feedback
+        .map((line) => clampStoredText(line, CHAT_HISTORY_MAX_FEEDBACK_CHARS).trim())
+        .filter(Boolean)
+        .slice(0, CHAT_HISTORY_MAX_FEEDBACK_LINES);
+      if (feedback.length) out.feedback = feedback;
+    }
+
+    return out;
+  };
+
+  const persistChatState = () => {
+    try {
+      const messages = [];
+      for (const msg of chatMessages.slice(-CHAT_HISTORY_MAX_MESSAGES)) {
+        const normalised = normaliseChatMessage(msg);
+        if (normalised) messages.push(normalised);
+      }
+
+      if (!messages.length) {
+        storageRemove(STORAGE_CHAT_HISTORY);
+        return;
+      }
+
+      const payload = { v: CHAT_HISTORY_SCHEMA_VERSION, messages };
+      storageSet(STORAGE_CHAT_HISTORY, JSON.stringify(payload));
+    } catch (error) {
+    }
+  };
+
   const SPARKLE_SVG = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M9.5 2L10.7 6.5 15 8l-4.3 1.5L9.5 14l-1.2-4.5L4 8l4.3-1.5L9.5 2z" fill="#3b82f6"/><path d="M19 10l.8 2.7L22.5 14l-2.7.8L19 17.5l-.8-2.7-2.7-.8 2.7-.8L19 10z" fill="#3b82f6" opacity=".6"/></svg>';
   const SPINNER_SMALL = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#7088ad" stroke-width="1.5" style="animation:vibbit-spin .9s linear infinite"><circle cx="7" cy="7" r="5" stroke-opacity=".25"></circle><path d="M7 2a5 5 0 0 1 5 5" stroke-linecap="round"></path></svg>';
   const CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#89e6a3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7l4 4 6-7"/></svg>';
@@ -637,7 +708,9 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   };
 
-  const addChatMessage = (msg) => {
+  const addChatMessage = (msg, options) => {
+    const shouldPersist = !options || options.persist !== false;
+
     /* remove empty state if present */
     const empty = chatMessagesEl.querySelector(".vibbit-empty-state");
     if (empty) empty.remove();
@@ -672,10 +745,12 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         if (action === "fix") handleFixConvert();
       });
     }
+    if (shouldPersist) persistChatState();
     return chatMessages.length - 1;
   };
 
-  const updateAssistantMessage = (idx, updates) => {
+  const updateAssistantMessage = (idx, updates, options) => {
+    const shouldPersist = !options || options.persist !== false;
     if (idx < 0 || idx >= chatMessages.length) return;
     const msg = chatMessages[idx];
     Object.assign(msg, updates);
@@ -684,9 +759,11 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     const bubble = wrapper.firstChild;
     if (bubble) bubble.innerHTML = buildAssistantHTML(msg);
     scrollChatToBottom();
+    if (shouldPersist) persistChatState();
   };
 
-  const clearChat = () => {
+  const clearChat = (options) => {
+    const shouldPersist = !options || options.persist !== false;
     chatMessages = [];
     chatMessageEls = [];
     undoStack = [];
@@ -694,6 +771,48 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     renderEmptyState();
     newChatBtn.style.display = "none";
     clearLog();
+    if (shouldPersist) persistChatState();
+  };
+
+  const restoreChatState = () => {
+    let parsed = null;
+    try {
+      const raw = storageGet(STORAGE_CHAT_HISTORY);
+      if (!raw) return;
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      storageRemove(STORAGE_CHAT_HISTORY);
+      return;
+    }
+
+    const sourceMessages = Array.isArray(parsed)
+      ? parsed
+      : (parsed && Array.isArray(parsed.messages) ? parsed.messages : []);
+    if (!sourceMessages.length) {
+      storageRemove(STORAGE_CHAT_HISTORY);
+      return;
+    }
+
+    const restored = [];
+    for (const item of sourceMessages.slice(-CHAT_HISTORY_MAX_MESSAGES)) {
+      const normalised = normaliseChatMessage(item);
+      if (!normalised) continue;
+      if (normalised.role === "assistant" && normalised.status === "generating") {
+        normalised.status = "cancelled";
+        normalised.content = "Generation was interrupted after page reload.";
+      }
+      restored.push(normalised);
+    }
+    if (!restored.length) {
+      storageRemove(STORAGE_CHAT_HISTORY);
+      return;
+    }
+
+    chatMessagesEl.innerHTML = "";
+    chatMessages = [];
+    chatMessageEls = [];
+    restored.forEach((msg) => addChatMessage(msg, { persist: false }));
+    persistChatState();
   };
 
   /* ── log helpers ───────────────────────────────────────── */
@@ -768,6 +887,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   /* init empty state */
   renderEmptyState();
+  restoreChatState();
 
   /* ── resolve effective backend URL ───────────────────────── */
   const DEFAULT_SERVER = BACKEND.replace(/^https?:\/\//, "");
