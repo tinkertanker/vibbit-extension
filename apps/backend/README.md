@@ -20,9 +20,9 @@ The backend keeps provider API keys server-side and proxies generation requests.
 
 ## Admin panel
 
-- Classroom mode: open `/admin?code=<CLASSCODE>`
-- App-token mode: open `/admin?token=<SERVER_APP_TOKEN>`
-- No-auth mode: open `/admin`
+- Open `/admin?admin=<ADMINTOKEN>`
+- On startup, backend logs the admin URL with token.
+- Optional: set `VIBBIT_ADMIN_TOKEN` to provide a fixed admin token.
 
 The panel shows effective runtime config, active session count, quick links, and provider setup controls.
 
@@ -112,7 +112,7 @@ By default:
 
 Share that URL + code with students.
 
-Then open `/admin?code=<CLASSCODE>` and set provider API keys/models in the **Provider Setup** section.
+Then open `/admin?admin=<ADMINTOKEN>` and set provider API keys/models in the **Provider Setup** section.
 
 ## Environment variables
 
@@ -124,6 +124,7 @@ Core:
 - `VIBBIT_EMPTY_RETRIES` (default `2`)
 - `VIBBIT_VALIDATION_RETRIES` (default `2`)
 - `VIBBIT_STATE_FILE` (default `.vibbit-backend-state.json`; persisted admin provider config path)
+- `VIBBIT_ADMIN_TOKEN` (optional fixed admin token; if empty, auto-generated and persisted in `VIBBIT_STATE_FILE`)
 
 Classroom auth:
 
@@ -167,7 +168,7 @@ Deploy button (placeholder until template is published):
 1. Open [Railway New Project](https://railway.com/new) and choose **Deploy from GitHub repo**.
 2. Select this repository.
 3. Set the service root directory to `apps/backend`.
-4. Add environment variables from `.env.example` (at minimum, one provider API key).
+4. Add environment variables from `.env.example` (provider API keys are optional if entered via `/admin`).
 5. Generate a public domain for the service.
 6. Share that HTTPS URL plus the classroom code with students.
 

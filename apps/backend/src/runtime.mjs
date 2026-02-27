@@ -1127,10 +1127,8 @@ function providerDisplayName(provider) {
 
 function buildAdminAuthQuery(requestUrl, extras = {}) {
   const params = new URLSearchParams();
-  const code = String(requestUrl.searchParams.get("code") || "").trim();
-  const token = String(requestUrl.searchParams.get("token") || "").trim();
-  if (code) params.set("code", code);
-  if (token) params.set("token", token);
+  const admin = String(requestUrl.searchParams.get("admin") || "").trim();
+  if (admin) params.set("admin", admin);
   for (const [key, value] of Object.entries(extras || {})) {
     if (value == null) continue;
     const text = String(value).trim();
@@ -1150,14 +1148,11 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function renderAdminPanel(runtimeConfig, sessionStore, requestUrl, adminProviderState) {
+function renderAdminPanel(runtimeConfig, sessionStore, requestUrl, adminProviderState, adminAuthToken) {
   const status = buildAdminStatus(runtimeConfig, sessionStore, adminProviderState);
-  const authMode = getAuthMode(runtimeConfig);
-  const authHint = authMode === "classroom"
-    ? `Classroom mode is enabled. Open this page with <code>?code=${escapeHtml(runtimeConfig.classroomCode)}</code> or send <code>X-Vibbit-Class-Code</code>.`
-    : (authMode === "app-token"
-      ? "App-token mode is enabled. Open this page with <code>?token=...</code> or send <code>Authorization: Bearer ...</code>."
-      : "No admin auth is configured.");
+  const authHint = adminAuthToken
+    ? "Admin token auth is enabled. Open this page with <code>?admin=...</code>, or send <code>X-Vibbit-Admin-Token</code>, or <code>Authorization: Bearer ...</code>."
+    : "Admin auth token is not configured.";
 
   const authQuery = buildAdminAuthQuery(requestUrl);
   const baseUrl = `${requestUrl.origin}`;
@@ -1269,26 +1264,18 @@ function renderAdminPanel(runtimeConfig, sessionStore, requestUrl, adminProvider
   ].join("");
 }
 
-function isAdminRequestAuthorised(request, runtimeConfig, requestUrl) {
-  const authMode = getAuthMode(runtimeConfig);
-  if (authMode === "none") return true;
-
-  const bearer = extractBearerToken(request.headers.get("authorization"));
-
-  if (authMode === "app-token") {
-    const queryToken = String(requestUrl.searchParams.get("token") || "").trim();
-    const candidate = bearer || queryToken;
-    return Boolean(candidate && candidate === runtimeConfig.appToken);
+function isAdminRequestAuthorised(request, runtimeConfig, requestUrl, adminAuthToken) {
+  const configuredAdminToken = String(adminAuthToken || "").trim();
+  if (configuredAdminToken) {
+    const headerToken = String(request.headers.get("x-vibbit-admin-token") || "").trim();
+    const queryToken = String(requestUrl.searchParams.get("admin") || "").trim();
+    const legacyQueryToken = String(requestUrl.searchParams.get("token") || "").trim();
+    const bearer = extractBearerToken(request.headers.get("authorization"));
+    const candidate = headerToken || queryToken || legacyQueryToken || bearer;
+    return Boolean(candidate && candidate === configuredAdminToken);
   }
 
-  if (authMode === "classroom") {
-    const classHeader = String(request.headers.get("x-vibbit-class-code") || "").trim();
-    const queryCode = String(requestUrl.searchParams.get("code") || "").trim();
-    const candidate = classHeader || queryCode || bearer;
-    return isClassroomCodeValid(candidate, runtimeConfig);
-  }
-
-  return false;
+  return getAuthMode(runtimeConfig) === "none";
 }
 
 function isClassroomCodeValid(candidate, runtimeConfig) {
@@ -1358,6 +1345,12 @@ export function createBackendRuntime(options = {}) {
   const env = options.env || (typeof process !== "undefined" ? process.env : {});
   const runtimeConfig = createRuntimeConfig(env);
   const sessionStore = createSessionStore(runtimeConfig.sessionTtlMs);
+  const adminAuthToken = String(
+    options.adminAuthToken
+    || env.VIBBIT_ADMIN_TOKEN
+    || runtimeConfig.appToken
+    || ""
+  ).trim();
   const persistAdminProviderState = typeof options.persistAdminProviderState === "function"
     ? options.persistAdminProviderState
     : (() => Promise.resolve());
@@ -1434,22 +1427,22 @@ export function createBackendRuntime(options = {}) {
     }
 
     if (pathname === "/admin" && request.method === "GET") {
-      if (!isAdminRequestAuthorised(request, runtimeConfig, requestUrl)) {
+      if (!isAdminRequestAuthorised(request, runtimeConfig, requestUrl, adminAuthToken)) {
         return respondJson(401, { error: "Unauthorized" }, origin, runtimeConfig);
       }
-      const html = renderAdminPanel(runtimeConfig, sessionStore, requestUrl, adminProviderState);
+      const html = renderAdminPanel(runtimeConfig, sessionStore, requestUrl, adminProviderState, adminAuthToken);
       return respondHtml(200, html, origin, runtimeConfig);
     }
 
     if (pathname === "/admin/status" && request.method === "GET") {
-      if (!isAdminRequestAuthorised(request, runtimeConfig, requestUrl)) {
+      if (!isAdminRequestAuthorised(request, runtimeConfig, requestUrl, adminAuthToken)) {
         return respondJson(401, { error: "Unauthorized" }, origin, runtimeConfig);
       }
       return respondJson(200, buildAdminStatus(runtimeConfig, sessionStore, adminProviderState), origin, runtimeConfig);
     }
 
     if (pathname === "/admin/config" && request.method === "POST") {
-      if (!isAdminRequestAuthorised(request, runtimeConfig, requestUrl)) {
+      if (!isAdminRequestAuthorised(request, runtimeConfig, requestUrl, adminAuthToken)) {
         return respondJson(401, { error: "Unauthorized" }, origin, runtimeConfig);
       }
       try {

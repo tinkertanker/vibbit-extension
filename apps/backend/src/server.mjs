@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createBackendRuntime } from "./runtime.mjs";
@@ -24,16 +25,34 @@ function writeStateFile(filePath, state) {
   renameSync(tempPath, filePath);
 }
 
+function createAdminAuthToken() {
+  return "vba_" + randomBytes(24).toString("base64url");
+}
+
 let persistedState = readStateFile(STATE_FILE);
+const envAdminAuthToken = String(process.env.VIBBIT_ADMIN_TOKEN || "").trim();
+let adminAuthToken = envAdminAuthToken || String(persistedState.adminAuthToken || "").trim();
+if (!adminAuthToken) {
+  adminAuthToken = createAdminAuthToken();
+  persistedState = {
+    ...(persistedState && typeof persistedState === "object" ? persistedState : {}),
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    adminAuthToken
+  };
+  writeStateFile(STATE_FILE, persistedState);
+}
 
 const runtime = createBackendRuntime({
   env: process.env,
+  adminAuthToken,
   adminProviderState: persistedState.adminProviderState || {},
   persistAdminProviderState: async (nextAdminProviderState) => {
     persistedState = {
       ...(persistedState && typeof persistedState === "object" ? persistedState : {}),
       version: 1,
       updatedAt: new Date().toISOString(),
+      adminAuthToken,
       adminProviderState: nextAdminProviderState
     };
     writeStateFile(STATE_FILE, persistedState);
@@ -97,5 +116,6 @@ server.listen(PORT, () => {
   const listenUrl = `http://localhost:${PORT}`;
   const lines = runtime.getStartupInfo({ listenUrl });
   for (const line of lines) console.log(line);
+  console.log(`[Vibbit backend] Admin panel -> URL: ${listenUrl}/admin?admin=${adminAuthToken}`);
   console.log(`[Vibbit backend] State file=${STATE_FILE}`);
 });

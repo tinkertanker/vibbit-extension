@@ -11,7 +11,7 @@ This repo ships one Vibbit runtime supporting both:
 2. Teacher shares only:
    - server URL
    - class code
-3. Teacher can inspect backend status at `/admin` (for classroom mode: `/admin?code=<CLASSCODE>`).
+3. Teacher can inspect backend status at `/admin` (using `/admin?admin=<ADMINTOKEN>`).
 4. Students open Vibbit in MakeCode, choose `Managed`, and enter URL + class code.
 5. Vibbit connects to `/vibbit/connect`, receives a short-lived session token, then calls `/vibbit/generate`.
 6. Provider keys stay on the server.
@@ -72,9 +72,9 @@ Default local URL:
 
 - `http://localhost:8787`
 
-On start, backend logs the classroom share line (URL + class code).
+On start, backend logs the classroom share line (URL + class code) and the admin URL (`/admin?admin=...`).
 
-If provider keys are not set in env, open `/admin?code=<CLASSCODE>` and configure them in the Provider Setup form.
+If provider keys are not set in env, open `/admin?admin=<ADMINTOKEN>` and configure them in the Provider Setup form.
 
 ## Deploy backend (monorepo)
 
