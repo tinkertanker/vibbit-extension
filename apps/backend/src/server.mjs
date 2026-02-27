@@ -1,8 +1,44 @@
 import { createServer } from "node:http";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { createBackendRuntime } from "./runtime.mjs";
 
 const PORT = Number(process.env.PORT || 8787);
-const runtime = createBackendRuntime({ env: process.env });
+const STATE_FILE = resolve(process.env.VIBBIT_STATE_FILE || ".vibbit-backend-state.json");
+
+function readStateFile(filePath) {
+  try {
+    const raw = readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {
+  }
+  return {};
+}
+
+function writeStateFile(filePath, state) {
+  const dir = dirname(filePath);
+  mkdirSync(dir, { recursive: true });
+  const tempPath = `${filePath}.tmp`;
+  writeFileSync(tempPath, JSON.stringify(state, null, 2), "utf8");
+  renameSync(tempPath, filePath);
+}
+
+let persistedState = readStateFile(STATE_FILE);
+
+const runtime = createBackendRuntime({
+  env: process.env,
+  adminProviderState: persistedState.adminProviderState || {},
+  persistAdminProviderState: async (nextAdminProviderState) => {
+    persistedState = {
+      ...(persistedState && typeof persistedState === "object" ? persistedState : {}),
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      adminProviderState: nextAdminProviderState
+    };
+    writeStateFile(STATE_FILE, persistedState);
+  }
+});
 
 function toFetchRequest(req) {
   const protocol = req.socket && req.socket.encrypted ? "https" : "http";
@@ -61,4 +97,5 @@ server.listen(PORT, () => {
   const listenUrl = `http://localhost:${PORT}`;
   const lines = runtime.getStartupInfo({ listenUrl });
   for (const line of lines) console.log(line);
+  console.log(`[Vibbit backend] State file=${STATE_FILE}`);
 });

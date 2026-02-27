@@ -24,7 +24,7 @@ The backend keeps provider API keys server-side and proxies generation requests.
 - App-token mode: open `/admin?token=<SERVER_APP_TOKEN>`
 - No-auth mode: open `/admin`
 
-The panel shows effective runtime config, active session count, and quick links to diagnostic endpoints.
+The panel shows effective runtime config, active session count, quick links, and provider setup controls.
 
 ## Classroom connection flow
 
@@ -101,7 +101,6 @@ Error response:
 ```bash
 cd apps/backend
 cp .env.example .env
-# set at least one provider API key (for example VIBBIT_OPENAI_API_KEY)
 npm start
 ```
 
@@ -113,6 +112,8 @@ By default:
 
 Share that URL + code with students.
 
+Then open `/admin?code=<CLASSCODE>` and set provider API keys/models in the **Provider Setup** section.
+
 ## Environment variables
 
 Core:
@@ -122,6 +123,7 @@ Core:
 - `VIBBIT_REQUEST_TIMEOUT_MS` (default `60000`)
 - `VIBBIT_EMPTY_RETRIES` (default `2`)
 - `VIBBIT_VALIDATION_RETRIES` (default `2`)
+- `VIBBIT_STATE_FILE` (default `.vibbit-backend-state.json`; persisted admin provider config path)
 
 Classroom auth:
 
@@ -145,10 +147,12 @@ Provider routing:
 
 Provider keys/models:
 
-- `VIBBIT_API_KEY` (shared fallback)
-- `VIBBIT_OPENAI_API_KEY`, `VIBBIT_OPENAI_MODEL`
-- `VIBBIT_GEMINI_API_KEY`, `VIBBIT_GEMINI_MODEL`
-- `VIBBIT_OPENROUTER_API_KEY`, `VIBBIT_OPENROUTER_MODEL`
+- `VIBBIT_API_KEY` (shared fallback; optional)
+- `VIBBIT_OPENAI_API_KEY`, `VIBBIT_OPENAI_MODEL` (optional)
+- `VIBBIT_GEMINI_API_KEY`, `VIBBIT_GEMINI_MODEL` (optional)
+- `VIBBIT_OPENROUTER_API_KEY`, `VIBBIT_OPENROUTER_MODEL` (optional)
+
+If these are omitted, set provider keys/models via `/admin` and they are persisted to `VIBBIT_STATE_FILE`.
 
 ## Deploy target (Railway)
 
@@ -179,4 +183,5 @@ npm run deploy:railway
 ## Notes
 
 - For multi-replica deployments, keep session validation consistent across instances (stateless signed tokens or shared store).
+- `VIBBIT_STATE_FILE` stores admin-saved provider keys; treat it as sensitive and do not commit it.
 - `GET /vibbit/config` is useful for quick diagnostics without exposing secrets.

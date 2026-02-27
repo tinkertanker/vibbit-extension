@@ -65,7 +65,6 @@ VIBBIT_BACKEND="https://your-server.example" VIBBIT_APP_TOKEN="optional-token" n
 
 ```bash
 cp apps/backend/.env.example apps/backend/.env
-# set at least one provider API key, for example VIBBIT_OPENAI_API_KEY
 npm run backend:start
 ```
 
@@ -74,6 +73,8 @@ Default local URL:
 - `http://localhost:8787`
 
 On start, backend logs the classroom share line (URL + class code).
+
+If provider keys are not set in env, open `/admin?code=<CLASSCODE>` and configure them in the Provider Setup form.
 
 ## Deploy backend (monorepo)
 
