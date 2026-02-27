@@ -98,10 +98,14 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const S_ICON_BTN = "background:transparent;border:none;color:#93a4c4;cursor:pointer;padding:4px;display:flex;align-items:center";
   const CLOSE_SVG = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 1l12 12M13 1L1 13"/></svg>';
 
-  /* ── panel container ─────────────────────────────────────── */
+  /* ── backdrop + modal container ──────────────────────────── */
+  const backdrop = document.createElement("div");
+  backdrop.id = "vibbit-backdrop";
+  backdrop.style.cssText = "position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(6,10,24,.62);backdrop-filter:blur(3px);z-index:2147483646;transition:opacity .2s ease";
+
   const ui = document.createElement("div");
   ui.id = "vibbit-panel";
-  ui.style.cssText = "position:fixed;right:12px;bottom:12px;width:460px;max-height:84vh;overflow:auto;background:#0b1020;color:#e6e8ef;font-family:system-ui,Segoe UI,Arial,sans-serif;border:1px solid #21304f;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:none;flex-direction:column;z-index:2147483646;transform-origin:bottom right;transition:transform .2s ease,opacity .2s ease";
+  ui.style.cssText = "width:680px;max-width:calc(100vw - 48px);max-height:80vh;background:#0b1020;color:#e6e8ef;font-family:system-ui,Segoe UI,Arial,sans-serif;border:1px solid #21304f;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden";
 
   /* ── build HTML ──────────────────────────────────────────── */
   ui.innerHTML = ""
@@ -109,14 +113,15 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     + '<div id="bv-setup" style="display:none;flex-direction:column">'
 
     /* header */
-    + '<div id="h-setup" style="cursor:move;display:flex;align-items:center;padding:10px 12px;background:#111936;border-bottom:1px solid #21304f">'
-    + '  <span style="font-weight:600;font-size:13px">Vibbit</span>'
+    + '<div id="h-setup" style="display:flex;align-items:center;padding:12px 16px;background:#111936;border-bottom:1px solid #21304f">'
+    + '  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="margin-right:8px"><path d="M9.5 2L10.7 6.5 15 8l-4.3 1.5L9.5 14l-1.2-4.5L4 8l4.3-1.5L9.5 2z" fill="#3b82f6"/><path d="M19 10l.8 2.7L22.5 14l-2.7.8L19 17.5l-.8-2.7-2.7-.8 2.7-.8L19 10z" fill="#3b82f6" opacity=".6"/></svg>'
+    + '  <span style="font-weight:600;font-size:14px">Vibbit</span>'
     + '  <button id="x-setup" aria-label="Close" style="margin-left:auto;' + S_ICON_BTN + '">' + CLOSE_SVG + '</button>'
     + '</div>'
 
     /* body */
-    + '<div style="padding:16px 14px;display:grid;gap:12px">'
-    + '  <div style="font-size:15px;font-weight:600;color:#e6e8ef">Welcome to Vibbit</div>'
+    + '<div style="padding:20px 18px;display:grid;gap:14px">'
+    + '  <div style="font-size:16px;font-weight:600;color:#e6e8ef">Welcome to Vibbit</div>'
 
     /* mode */
     + '  <div style="display:grid;gap:4px">'
@@ -162,12 +167,13 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     + '</div>'
     + '</div>'
 
-    /* ═══ VIEW 2: MAIN ═══ */
-    + '<div id="bv-main" style="display:none;flex-direction:column">'
+    /* ═══ VIEW 2: MAIN (chat layout) ═══ */
+    + '<div id="bv-main" style="display:none;flex-direction:column;height:80vh;max-height:80vh">'
 
     /* header */
-    + '<div id="h-main" style="cursor:move;display:flex;align-items:center;padding:10px 12px;background:#111936;border-bottom:1px solid #21304f">'
-    + '  <span style="font-weight:600;font-size:13px">Vibbit</span>'
+    + '<div id="h-main" style="display:flex;align-items:center;padding:12px 16px;background:#111936;border-bottom:1px solid #21304f;flex-shrink:0">'
+    + '  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="margin-right:8px"><path d="M9.5 2L10.7 6.5 15 8l-4.3 1.5L9.5 14l-1.2-4.5L4 8l4.3-1.5L9.5 2z" fill="#3b82f6"/><path d="M19 10l.8 2.7L22.5 14l-2.7.8L19 17.5l-.8-2.7-2.7-.8 2.7-.8L19 10z" fill="#3b82f6" opacity=".6"/></svg>'
+    + '  <span style="font-weight:600;font-size:14px">Vibbit</span>'
     + '  <span id="busy-indicator" aria-hidden="true" style="margin-left:8px;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;opacity:0;visibility:hidden;transition:opacity .15s ease;">'
     + '    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#9bb1dd" stroke-width="1.5" style="animation:vibbit-spin .9s linear infinite">'
     + '      <circle cx="7" cy="7" r="5" stroke-opacity=".25"></circle>'
@@ -179,34 +185,25 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     + '  <button id="x-main" aria-label="Close" style="margin-left:6px;' + S_ICON_BTN + '">' + CLOSE_SVG + '</button>'
     + '</div>'
 
-    /* body */
-    + '<div style="padding:12px 14px;display:grid;gap:10px;align-content:start;min-height:170px">'
-    + '  <textarea id="p" rows="6" placeholder="Describe what you want the block code to do \u2013 try to be specific" style="resize:vertical;min-height:96px;padding:10px;border-radius:8px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef;font-size:13px;line-height:1.4"></textarea>'
-    + '  <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#c7d2fe;cursor:pointer"><input id="inc" type="checkbox" checked style="cursor:pointer">Use current code</label>'
-    + '  <div style="display:flex;gap:8px;align-items:center">'
-    + '    <button id="go" style="flex:1 1 auto;padding:10px;border:none;border-radius:8px;background:#3454D1;color:#fff;font-weight:600;cursor:pointer">Generate</button>'
-    + '    <button id="revert" aria-label="Revert to previous code" title="Revert to previous code" style="width:38px;height:38px;display:none;align-items:center;justify-content:center;border:1px solid #2b3a5a;border-radius:999px;background:#1a2745;color:#d6e4ff;cursor:pointer" disabled><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.5H8a4.5 4.5 0 1 1-4.5 4.5"/><path d="M3.5 4.5L6 2"/><path d="M3.5 4.5 6 7"/></svg></button>'
-    + '  </div>'
-    + '  <button id="fix-convert" style="display:none;padding:8px 10px;border:1px solid #3b4c76;border-radius:8px;background:#17233f;color:#d6e4ff;font-size:12px;font-weight:600;cursor:pointer">Fix convert error</button>'
-    + '  <div id="activity" style="min-height:18px;font-size:12px;line-height:1.2;color:#9bb1dd" aria-live="polite"></div>'
-    + '</div>'
+    /* chat messages area */
+    + '<div id="chat-messages" style="flex:1;overflow-y:auto;padding:20px 18px;display:flex;flex-direction:column;gap:12px"></div>'
 
-    /* feedback */
-    + '<div id="fb" style="display:none;margin:0 12px 10px;padding:12px;border-radius:10px;background:linear-gradient(135deg,#1b2441,#101a33);border:1px solid #354b7d;box-shadow:0 4px 18px rgba(0,0,0,.3);">'
-    + '  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">'
-    + '    <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#8fb7ff;display:flex;align-items:center;gap:6px;">'
-    + '      <span style="display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;border-radius:50%;background:#3b82f6;color:#0b1020;font-weight:700;font-size:10px;">i</span>'
-    + '      Model Feedback'
+    /* input area */
+    + '<div style="flex-shrink:0;border-top:1px solid #1f2b47;padding:12px 16px;background:#0d1528">'
+    + '  <textarea id="p" rows="2" placeholder="Describe what you want the block code to do\u2026" style="width:100%;resize:none;min-height:44px;max-height:120px;padding:10px 12px;border-radius:10px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef;font-size:13px;line-height:1.4;box-sizing:border-box;font-family:inherit"></textarea>'
+    + '  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">'
+    + '    <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#8899bb;cursor:pointer"><input id="inc" type="checkbox" checked style="cursor:pointer">Use current code</label>'
+    + '    <div style="display:flex;gap:8px;align-items:center">'
+    + '      <button id="new-chat-btn" style="display:none;padding:6px 14px;border:1px solid #29324e;border-radius:8px;background:transparent;color:#8899bb;font-size:12px;font-weight:500;cursor:pointer">New</button>'
+    + '      <button id="go" style="padding:8px 20px;border:none;border-radius:8px;background:#3454D1;color:#fff;font-weight:600;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">Send <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>'
     + '    </div>'
-    + '    <button id="fbToggle" aria-label="Toggle feedback" style="background:rgba(148,163,255,0.15);color:#cdd9ff;border:1px solid rgba(148,163,255,0.3);border-radius:16px;padding:2px 10px;font-size:11px;font-weight:500;cursor:pointer;">Hide</button>'
     + '  </div>'
-    + '  <div id="fbLines" style="display:grid;gap:6px;font-size:12px;color:#e4ecff;line-height:1.35;"></div>'
-    + '</div>'
 
-    /* log */
-    + '<div style="margin:0 12px 10px;padding-top:8px;border-top:1px solid #1f2b47;">'
-    + '  <button id="logToggle" aria-expanded="false" style="background:transparent;border:none;color:#98add7;font-size:11px;cursor:pointer;padding:0;line-height:1.2">Show logs</button>'
-    + '  <div id="log" style="margin-top:8px;padding:8px 10px;font-size:11px;line-height:1.2;color:#9bb1dd;display:none;max-height:132px;overflow:auto;background:#0e162f;border:1px solid #22325a;border-radius:8px"></div>'
+    /* collapsible log */
+    + '  <div style="margin-top:8px;padding-top:6px;border-top:1px solid #1a2340">'
+    + '    <button id="logToggle" aria-expanded="false" style="background:transparent;border:none;color:#5a6d8f;font-size:10px;cursor:pointer;padding:0;line-height:1.2">Show logs</button>'
+    + '    <div id="log" style="margin-top:6px;padding:6px 8px;font-size:10px;line-height:1.2;color:#7088ad;display:none;max-height:100px;overflow:auto;background:#080e1e;border:1px solid #1a2540;border-radius:6px"></div>'
+    + '  </div>'
     + '</div>'
     + '</div>'
 
@@ -214,14 +211,14 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     + '<div id="bv-settings" style="display:none;flex-direction:column">'
 
     /* header */
-    + '<div id="h-settings" style="cursor:move;display:flex;align-items:center;padding:10px 12px;background:#111936;border-bottom:1px solid #21304f">'
+    + '<div id="h-settings" style="display:flex;align-items:center;padding:12px 16px;background:#111936;border-bottom:1px solid #21304f">'
     + '  <button id="back" aria-label="Back" style="' + S_ICON_BTN + ';margin-right:6px"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L3 7l6 6"/></svg></button>'
-    + '  <span style="font-weight:600;font-size:13px">Settings</span>'
+    + '  <span style="font-weight:600;font-size:14px">Settings</span>'
     + '  <button id="x-settings" aria-label="Close" style="margin-left:auto;' + S_ICON_BTN + '">' + CLOSE_SVG + '</button>'
     + '</div>'
 
     /* body */
-    + '<div style="padding:14px;display:grid;gap:12px">'
+    + '<div style="padding:16px 18px;display:grid;gap:12px">'
 
     /* mode */
     + '  <div style="display:grid;gap:4px">'
@@ -279,49 +276,52 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     + '  </details>'
 
     + '</div>'
-    + '</div>'
-
-    /* resizer */
-    + '<div id="rz" style="position:absolute;width:14px;height:14px;right:2px;bottom:2px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#2b3a5a 50%);opacity:.9"></div>';
-
-  document.body.appendChild(ui);
-  const interactionOverlay = document.createElement("div");
-  interactionOverlay.id = "vibbit-interaction-overlay";
-  interactionOverlay.setAttribute("aria-hidden", "true");
-  interactionOverlay.innerHTML = ""
-    + '<div id="vibbit-overlay-card" data-mode="working" role="dialog" aria-modal="true" aria-labelledby="vibbit-overlay-label">'
-    + '  <div id="vibbit-overlay-icon-wrap" aria-hidden="true">'
-    + '    <svg id="vibbit-overlay-spinner" viewBox="0 0 44 44" fill="none" stroke="#c8d8ff" stroke-width="3">'
-    + '      <circle cx="22" cy="22" r="16" stroke-opacity=".22"></circle>'
-    + '      <path d="M22 6a16 16 0 0 1 16 16" stroke-linecap="round"></path>'
-    + '    </svg>'
-    + '    <svg id="vibbit-overlay-done" viewBox="0 0 44 44" fill="none" stroke="#9ef1b2" stroke-width="3">'
-    + '      <circle cx="22" cy="22" r="16" stroke-opacity=".35"></circle>'
-    + '      <path d="M14 23l6 6 10-12" stroke-linecap="round" stroke-linejoin="round"></path>'
-    + '    </svg>'
-    + '  </div>'
-    + '  <div id="vibbit-overlay-label" role="status" aria-live="polite" aria-atomic="true">Generating code...</div>'
-    + '  <button id="vibbit-overlay-cancel" type="button" style="min-width:84px;height:30px;padding:0 12px;border-radius:999px;border:1px solid rgba(124,153,232,.45);background:#15213f;color:#dbe6ff;font-size:12px;font-weight:600;line-height:1;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;appearance:none;-webkit-appearance:none;cursor:pointer">Cancel</button>'
     + '</div>';
-  document.body.appendChild(interactionOverlay);
+
+  backdrop.appendChild(ui);
+  document.body.appendChild(backdrop);
+
+  /* ── preview bar (shown when modal dismissed for preview) ── */
+  const previewBar = document.createElement("div");
+  previewBar.id = "vibbit-preview-bar";
+  previewBar.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:10px;padding:8px 14px;border-radius:999px;background:rgba(10,17,35,.94);border:1px solid #21304f;box-shadow:0 6px 24px rgba(0,0,0,.45);z-index:2147483646";
+  previewBar.innerHTML = ""
+    + '<button id="preview-return" style="padding:6px 16px;border:none;border-radius:999px;background:#3454D1;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">'
+    + '  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L3 7l6 6"/></svg>'
+    + '  Return to Vibbit'
+    + '</button>'
+    + '<button id="preview-new" style="padding:6px 14px;border:1px solid #29324e;border-radius:999px;background:transparent;color:#8899bb;font-size:12px;font-weight:500;cursor:pointer">New Chat</button>';
+  document.body.appendChild(previewBar);
+
+  /* hidden elements for backwards-compat refs */
+  const hiddenCompat = document.createElement("div");
+  hiddenCompat.style.display = "none";
+  hiddenCompat.innerHTML = '<div id="activity"></div><div id="fb"><div id="fbLines"></div><button id="fbToggle"></button></div><button id="fix-convert"></button><button id="revert"></button>';
+  ui.appendChild(hiddenCompat);
 
   const runtimeStyle = document.createElement("style");
   runtimeStyle.textContent = [
     "@keyframes vibbit-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}",
-    "@keyframes vibbit-overlay-pop{0%{transform:scale(.72);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}",
-    "#vibbit-interaction-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(6,10,20,.56);backdrop-filter:blur(2px);z-index:2147483647;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .18s ease,visibility .18s ease}",
-    "#vibbit-interaction-overlay[data-active='true']{opacity:1;visibility:visible;pointer-events:auto}",
-    "#vibbit-overlay-card{min-width:176px;padding:14px 18px;border-radius:12px;border:1px solid rgba(101,126,190,.35);background:rgba(10,17,35,.94);box-shadow:0 10px 32px rgba(0,0,0,.45);color:#e6e8ef;display:grid;justify-items:center;gap:9px}",
-    "#vibbit-overlay-icon-wrap{position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center}",
-    "#vibbit-overlay-spinner,#vibbit-overlay-done{position:absolute;top:0;left:0;width:44px;height:44px;transition:opacity .2s ease,transform .2s ease}",
-    "#vibbit-overlay-spinner{animation:vibbit-spin .9s linear infinite;opacity:1;transform:scale(1)}",
-    "#vibbit-overlay-done{opacity:0;transform:scale(.72)}",
-    "#vibbit-overlay-card[data-mode='done'] #vibbit-overlay-spinner{opacity:0;transform:scale(.82)}",
-    "#vibbit-overlay-card[data-mode='done'] #vibbit-overlay-done{opacity:1;transform:scale(1);animation:vibbit-overlay-pop .32s ease}",
-    "#vibbit-overlay-label{font-size:13px;font-weight:600;letter-spacing:.02em;white-space:nowrap}",
-    "#vibbit-overlay-cancel{display:inline-flex;align-items:center;justify-content:center;line-height:1;text-align:center}",
-    "#vibbit-overlay-cancel:hover{background:#1a2a52}",
-    "#vibbit-overlay-cancel:disabled{opacity:.6;cursor:default}"
+    "@keyframes vibbit-msg-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}",
+    "#vibbit-backdrop{opacity:0;transition:opacity .2s ease}",
+    "#vibbit-backdrop[data-active='true']{opacity:1}",
+    "#vibbit-preview-bar button:hover{filter:brightness(1.15)}",
+    ".vibbit-msg{animation:vibbit-msg-in .25s ease}",
+    ".vibbit-msg-user{display:flex;justify-content:flex-end}",
+    ".vibbit-msg-user>div{max-width:85%;padding:10px 14px;border-radius:14px 14px 4px 14px;background:#3454D1;color:#fff;font-size:13px;line-height:1.5;word-break:break-word}",
+    ".vibbit-msg-assistant{display:flex;justify-content:flex-start}",
+    ".vibbit-msg-assistant>div{max-width:90%;padding:12px 14px;border-radius:14px 14px 14px 4px;background:#141e38;border:1px solid #1f2d4d;color:#e0e6f0;font-size:13px;line-height:1.55;word-break:break-word}",
+    ".vibbit-msg-assistant .vibbit-feedback-line{padding:6px 10px;margin-top:6px;border-left:3px solid #3b82f6;border-radius:4px;background:rgba(59,130,246,0.1);color:#c5d6ff;font-size:12px;line-height:1.4}",
+    ".vibbit-msg-assistant .vibbit-msg-status{color:#7088ad;font-size:12px;display:flex;align-items:center;gap:6px}",
+    ".vibbit-msg-assistant .vibbit-msg-success{color:#89e6a3;font-size:12px;font-weight:500;margin-top:8px;display:flex;align-items:center;gap:6px}",
+    ".vibbit-msg-assistant .vibbit-msg-error{color:#fda4af;font-size:12px;margin-top:8px}",
+    ".vibbit-msg-assistant .vibbit-msg-actions{display:flex;gap:8px;margin-top:10px}",
+    ".vibbit-msg-assistant .vibbit-msg-actions button{padding:5px 14px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;transition:filter .1s}",
+    ".vibbit-msg-assistant .vibbit-msg-actions button:hover{filter:brightness(1.15)}",
+    ".vibbit-btn-preview{border:none;background:#3454D1;color:#fff}",
+    ".vibbit-btn-undo{border:1px solid #29324e;background:transparent;color:#8899bb}",
+    ".vibbit-btn-fix{border:1px solid #d97706;background:rgba(217,119,6,0.15);color:#fbbf24}",
+    ".vibbit-empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:14px;color:#4a5f82;padding:40px 20px;text-align:center;user-select:none}"
   ].join("\n");
   document.head.appendChild(runtimeStyle);
 
@@ -340,40 +340,50 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   const openPanel = function () {
     fab.style.display = "none";
-    ui.style.transform = "scale(0)";
-    ui.style.opacity = "0";
-    ui.style.display = "flex";
+    previewBar.style.display = "none";
+    backdrop.style.display = "flex";
     requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        ui.style.transform = "scale(1)";
-        ui.style.opacity = "1";
-      });
+      backdrop.dataset.active = "true";
+    });
+    requestAnimationFrame(function () {
+      try { promptEl && promptEl.focus({ preventScroll: true }); } catch (e) {}
     });
   };
 
   const closePanel = function () {
-    ui.style.transform = "scale(0)";
-    ui.style.opacity = "0";
-    var onEnd = function () {
-      ui.removeEventListener("transitionend", onEnd);
-      ui.style.display = "none";
+    backdrop.dataset.active = "";
+    previewBar.style.display = "none";
+    setTimeout(function () {
+      backdrop.style.display = "none";
       fab.style.display = "flex";
-    };
-    ui.addEventListener("transitionend", onEnd);
+    }, 200);
+  };
+
+  const enterPreview = function () {
+    backdrop.dataset.active = "";
+    setTimeout(function () {
+      backdrop.style.display = "none";
+      previewBar.style.display = "flex";
+    }, 200);
+  };
+
+  const exitPreview = function () {
+    previewBar.style.display = "none";
+    openPanel();
   };
 
   fab.onclick = openPanel;
   document.body.appendChild(fab);
 
+  /* ── backdrop click to close ───────────────────────────── */
+  backdrop.addEventListener("mousedown", function (e) {
+    if (e.target === backdrop) closePanel();
+  });
+
   /* ── element references ──────────────────────────────────── */
   const $ = (s) => ui.querySelector(s);
 
   const views = { setup: $("#bv-setup"), main: $("#bv-main"), settings: $("#bv-settings") };
-  const headers = [$("#h-setup"), $("#h-main"), $("#h-settings")];
-  const resizer = $("#rz");
-  const overlayCard = interactionOverlay.querySelector("#vibbit-overlay-card");
-  const overlayLabel = interactionOverlay.querySelector("#vibbit-overlay-label");
-  const overlayCancelBtn = interactionOverlay.querySelector("#vibbit-overlay-cancel");
 
   /* setup view refs */
   const setupMode = $("#setup-mode");
@@ -394,14 +404,22 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const promptEl = $("#p");
   const includeCurrent = $("#inc");
   const go = $("#go");
+  const chatMessagesEl = $("#chat-messages");
+  const newChatBtn = $("#new-chat-btn");
+  const logToggle = $("#logToggle");
+  const log = $("#log");
+
+  /* compat refs (hidden, used by internal helpers) */
   const revertBtn = $("#revert");
   const fixConvertBtn = $("#fix-convert");
   const activityEl = $("#activity");
-  const logToggle = $("#logToggle");
-  const log = $("#log");
   const feedbackBox = $("#fb");
   const feedbackLines = $("#fbLines");
   const feedbackToggle = $("#fbToggle");
+
+  /* preview bar refs */
+  const previewReturnBtn = previewBar.querySelector("#preview-return");
+  const previewNewBtn = previewBar.querySelector("#preview-new");
 
   /* settings view refs */
   const setMode = $("#set-mode");
@@ -478,15 +496,15 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   /* ── state ───────────────────────────────────────────────── */
   let undoStack = [];
   let busy = false;
-  let feedbackCollapsed = false;
   let logsCollapsed = true;
-  let activityTimer = 0;
-  let overlayTimer = 0;
   let generationController = null;
-  let lastFocusedElement = null;
   let queuedForcedRequest = "";
   let queuedForcedDialog = null;
   let lastConversionDialog = null;
+
+  /* chat conversation state */
+  let chatMessages = [];       /* {role,content,feedback?,code?,status?} */
+  let chatMessageEls = [];     /* parallel DOM elements */
 
   const setStatus = (value) => {
     const next = value || "";
@@ -546,142 +564,140 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return lines.join(" ");
   };
 
-  const hideFixConvertButton = () => {
-    fixConvertBtn.style.display = "none";
-    fixConvertBtn.disabled = true;
-    fixConvertBtn.setAttribute("aria-hidden", "true");
-  };
+  const hideFixConvertButton = () => {};
+  const showFixConvertButton = (dialog) => { lastConversionDialog = dialog || null; };
 
-  const showFixConvertButton = (dialog) => {
-    lastConversionDialog = dialog || null;
-    fixConvertBtn.textContent = "Fix convert error";
-    fixConvertBtn.style.display = "inline-flex";
-    fixConvertBtn.disabled = busy;
-    fixConvertBtn.style.opacity = busy ? "0.65" : "1";
-    fixConvertBtn.style.cursor = busy ? "default" : "pointer";
-    fixConvertBtn.setAttribute("aria-hidden", "false");
-  };
+  /* no-op compat stubs */
+  const showInteractionOverlay = () => {};
+  const hideInteractionOverlay = () => {};
 
-  const overlayIsActive = () => interactionOverlay.dataset.active === "true";
-
-  const restoreFocusAfterOverlay = () => {
-    const target = lastFocusedElement;
-    lastFocusedElement = null;
-    if (!target || typeof target.focus !== "function") return;
-    if (!document.contains(target)) return;
-    try {
-      target.focus({ preventScroll: true });
-    } catch (error) {
-      try { target.focus(); } catch (focusError) {}
-    }
-  };
-
-  const showInteractionOverlay = () => {
-    clearTimeout(overlayTimer);
-    overlayCard.dataset.mode = "working";
-    overlayLabel.textContent = "Generating code...";
-    overlayCancelBtn.textContent = "Cancel";
-    overlayCancelBtn.disabled = false;
-    overlayCancelBtn.style.display = "inline-flex";
-    interactionOverlay.dataset.active = "true";
-    interactionOverlay.setAttribute("aria-hidden", "false");
-    lastFocusedElement = document.activeElement;
-    requestAnimationFrame(() => {
-      try { overlayCancelBtn.focus({ preventScroll: true }); } catch (error) {}
-    });
-  };
-
-  const hideInteractionOverlay = (showDoneAnimation) => {
-    clearTimeout(overlayTimer);
-    if (interactionOverlay.dataset.active !== "true") return;
-    if (showDoneAnimation) {
-      overlayCard.dataset.mode = "done";
-      overlayLabel.textContent = "Done";
-      overlayCancelBtn.style.display = "none";
-      overlayTimer = setTimeout(() => {
-        interactionOverlay.dataset.active = "false";
-        interactionOverlay.setAttribute("aria-hidden", "true");
-        overlayCard.dataset.mode = "working";
-        overlayLabel.textContent = "Generating code...";
-        overlayCancelBtn.textContent = "Cancel";
-        overlayCancelBtn.disabled = false;
-        overlayCancelBtn.style.display = "inline-flex";
-        restoreFocusAfterOverlay();
-      }, 550);
-      return;
-    }
-    interactionOverlay.dataset.active = "false";
-    interactionOverlay.setAttribute("aria-hidden", "true");
-    overlayCard.dataset.mode = "working";
-    overlayLabel.textContent = "Generating code...";
-    overlayCancelBtn.textContent = "Cancel";
-    overlayCancelBtn.disabled = false;
-    overlayCancelBtn.style.display = "inline-flex";
-    restoreFocusAfterOverlay();
-  };
-
-  document.addEventListener("focusin", (event) => {
-    if (!overlayIsActive()) return;
-    if (overlayCard.contains(event.target)) return;
-    event.stopPropagation();
-    try { overlayCancelBtn.focus({ preventScroll: true }); } catch (error) {}
-  }, true);
-
-  document.addEventListener("keydown", (event) => {
-    if (!overlayIsActive()) return;
-    const insideOverlay = overlayCard.contains(event.target);
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      if (!overlayCancelBtn.disabled) overlayCancelBtn.click();
-      return;
-    }
-    if (insideOverlay) return;
-    event.preventDefault();
-    event.stopPropagation();
-  }, true);
-
-  overlayCancelBtn.onclick = () => {
-    if (!busy || !generationController) return;
-    overlayCancelBtn.disabled = true;
-    overlayCancelBtn.textContent = "Cancelling...";
-    setStatus("Cancelling");
-    setActivity("Cancelling generation...", "neutral", true);
-    logLine("Cancelling generation...");
-    generationController.abort();
-  };
-
-  const setActivity = (message, tone, persistent) => {
-    const palette = {
-      neutral: "#9bb1dd",
-      success: "#89e6a3",
-      error: "#fda4af"
-    };
-    clearTimeout(activityTimer);
+  const setActivity = (message) => {
     activityEl.textContent = message || "";
-    activityEl.style.color = palette[tone || "neutral"] || palette.neutral;
-    if (message && !persistent) {
-      activityTimer = setTimeout(() => {
-        activityEl.textContent = "";
-        activityEl.style.color = palette.neutral;
-      }, 2600);
-    }
   };
 
-  const refreshRevertButton = () => {
-    const canRevert = undoStack.length > 0 && !busy;
-    revertBtn.disabled = !canRevert;
-    revertBtn.style.display = canRevert ? "flex" : "none";
-    revertBtn.style.pointerEvents = canRevert ? "auto" : "none";
-    revertBtn.style.cursor = canRevert ? "pointer" : "default";
-    revertBtn.setAttribute("aria-hidden", canRevert ? "false" : "true");
-    if (fixConvertBtn.style.display !== "none") {
-      fixConvertBtn.disabled = busy;
-      fixConvertBtn.style.opacity = busy ? "0.65" : "1";
-      fixConvertBtn.style.cursor = busy ? "default" : "pointer";
-    }
+  const refreshRevertButton = () => {};
+
+  /* ── chat rendering ────────────────────────────────────── */
+  const SPARKLE_SVG = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M9.5 2L10.7 6.5 15 8l-4.3 1.5L9.5 14l-1.2-4.5L4 8l4.3-1.5L9.5 2z" fill="#3b82f6"/><path d="M19 10l.8 2.7L22.5 14l-2.7.8L19 17.5l-.8-2.7-2.7-.8 2.7-.8L19 10z" fill="#3b82f6" opacity=".6"/></svg>';
+  const SPINNER_SMALL = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#7088ad" stroke-width="1.5" style="animation:vibbit-spin .9s linear infinite"><circle cx="7" cy="7" r="5" stroke-opacity=".25"></circle><path d="M7 2a5 5 0 0 1 5 5" stroke-linecap="round"></path></svg>';
+  const CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#89e6a3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7l4 4 6-7"/></svg>';
+
+  const renderEmptyState = () => {
+    chatMessagesEl.innerHTML = '<div class="vibbit-empty-state">'
+      + SPARKLE_SVG
+      + '<div style="font-size:16px;font-weight:600;color:#8899bb">What would you like to build?</div>'
+      + '<div style="font-size:13px;line-height:1.5;max-width:340px;color:#5a6d8f">Describe your MakeCode project and I\'ll generate the block code for you.</div>'
+      + '</div>';
   };
 
+  const scrollChatToBottom = () => {
+    requestAnimationFrame(() => { chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight; });
+  };
+
+  const buildAssistantHTML = (msg) => {
+    let html = '';
+    if (msg.status === "generating") {
+      html += '<div class="vibbit-msg-status">' + SPINNER_SMALL + ' ' + (msg.content || "Generating\u2026") + '</div>';
+    } else if (msg.status === "done") {
+      if (msg.feedback && msg.feedback.length) {
+        msg.feedback.forEach(function (line) {
+          html += '<div class="vibbit-feedback-line">' + escapeHTML(line) + '</div>';
+        });
+      }
+      html += '<div class="vibbit-msg-success">' + CHECK_SVG + ' Code applied to MakeCode</div>';
+      html += '<div class="vibbit-msg-actions">';
+      html += '<button class="vibbit-btn-preview" data-action="preview">Preview</button>';
+      if (undoStack.length > 0) {
+        html += '<button class="vibbit-btn-undo" data-action="undo">Undo</button>';
+      }
+      html += '</div>';
+    } else if (msg.status === "error") {
+      html += '<div class="vibbit-msg-error">' + escapeHTML(msg.content || "Something went wrong.") + '</div>';
+    } else if (msg.status === "cancelled") {
+      html += '<div class="vibbit-msg-status">' + escapeHTML(msg.content || "Cancelled.") + '</div>';
+    } else if (msg.status === "convert-error") {
+      if (msg.feedback && msg.feedback.length) {
+        msg.feedback.forEach(function (line) {
+          html += '<div class="vibbit-feedback-line">' + escapeHTML(line) + '</div>';
+        });
+      }
+      html += '<div class="vibbit-msg-error">MakeCode couldn\'t convert to blocks.</div>';
+      html += '<div class="vibbit-msg-actions">';
+      html += '<button class="vibbit-btn-fix" data-action="fix">Fix conversion</button>';
+      if (undoStack.length > 0) {
+        html += '<button class="vibbit-btn-undo" data-action="undo">Undo</button>';
+      }
+      html += '</div>';
+    } else {
+      html += '<div>' + escapeHTML(msg.content || "") + '</div>';
+    }
+    return html;
+  };
+
+  const escapeHTML = (str) => {
+    return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  };
+
+  const addChatMessage = (msg) => {
+    /* remove empty state if present */
+    const empty = chatMessagesEl.querySelector(".vibbit-empty-state");
+    if (empty) empty.remove();
+
+    chatMessages.push(msg);
+    const wrapper = document.createElement("div");
+    wrapper.className = "vibbit-msg " + (msg.role === "user" ? "vibbit-msg-user" : "vibbit-msg-assistant");
+    const bubble = document.createElement("div");
+    if (msg.role === "user") {
+      bubble.textContent = msg.content;
+    } else {
+      bubble.innerHTML = buildAssistantHTML(msg);
+    }
+    wrapper.appendChild(bubble);
+    chatMessagesEl.appendChild(wrapper);
+    chatMessageEls.push(wrapper);
+    scrollChatToBottom();
+
+    /* show New Chat button after first exchange */
+    if (chatMessages.length >= 1) {
+      newChatBtn.style.display = "inline-flex";
+    }
+
+    /* attach action handlers for assistant messages */
+    if (msg.role === "assistant") {
+      wrapper.addEventListener("click", function (e) {
+        const btn = e.target.closest("[data-action]");
+        if (!btn) return;
+        const action = btn.dataset.action;
+        if (action === "preview") enterPreview();
+        if (action === "undo") handleRevert();
+        if (action === "fix") handleFixConvert();
+      });
+    }
+    return chatMessages.length - 1;
+  };
+
+  const updateAssistantMessage = (idx, updates) => {
+    if (idx < 0 || idx >= chatMessages.length) return;
+    const msg = chatMessages[idx];
+    Object.assign(msg, updates);
+    const wrapper = chatMessageEls[idx];
+    if (!wrapper) return;
+    const bubble = wrapper.firstChild;
+    if (bubble) bubble.innerHTML = buildAssistantHTML(msg);
+    scrollChatToBottom();
+  };
+
+  const clearChat = () => {
+    chatMessages = [];
+    chatMessageEls = [];
+    undoStack = [];
+    lastConversionDialog = null;
+    renderEmptyState();
+    newChatBtn.style.display = "none";
+    clearLog();
+  };
+
+  /* ── log helpers ───────────────────────────────────────── */
   const applyLogCollapse = () => {
     log.style.display = logsCollapsed ? "none" : "block";
     logToggle.textContent = logsCollapsed ? "Show logs" : "Hide logs";
@@ -700,67 +716,54 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     log.innerHTML = "";
   };
 
-  /* ── feedback panel ──────────────────────────────────────── */
-  const applyFeedbackCollapse = () => {
-    if (feedbackCollapsed) {
-      feedbackLines.style.display = "none";
-      feedbackToggle.textContent = "Show";
-      feedbackToggle.setAttribute("aria-expanded", "false");
-      feedbackBox.style.paddingBottom = "8px";
-    } else {
-      feedbackLines.style.display = "grid";
-      feedbackToggle.textContent = "Hide";
-      feedbackToggle.setAttribute("aria-expanded", "true");
-      feedbackBox.style.paddingBottom = "12px";
-    }
-  };
+  /* ── feedback compat (no-op, chat handles display) ──── */
+  const renderFeedback = () => {};
 
-  const renderFeedback = (items) => {
-    feedbackLines.innerHTML = "";
-    const list = (items || []).filter((item) => item && String(item).trim());
-    if (!list.length) {
-      feedbackCollapsed = false;
-      feedbackBox.style.display = "none";
-      feedbackBox.setAttribute("aria-hidden", "true");
-      feedbackToggle.style.visibility = "hidden";
-      return;
-    }
-
-    list.forEach((item) => {
-      const bubble = document.createElement("div");
-      bubble.textContent = String(item).trim();
-      bubble.style.cssText = "padding:8px 10px;border-left:3px solid #3b82f6;border-radius:6px;background:rgba(59,130,246,0.14);color:#f1f5ff;";
-      feedbackLines.appendChild(bubble);
-    });
-
-    feedbackCollapsed = false;
-    feedbackToggle.style.visibility = "visible";
-    feedbackBox.style.display = "block";
-    feedbackBox.setAttribute("aria-hidden", "false");
-    applyFeedbackCollapse();
-  };
-
-  feedbackToggle.style.visibility = "hidden";
-  feedbackToggle.onclick = () => {
-    if (feedbackBox.style.display === "none") return;
-    feedbackCollapsed = !feedbackCollapsed;
-    applyFeedbackCollapse();
-  };
-  fixConvertBtn.onclick = () => {
-    if (busy) return;
-    queuedForcedDialog = lastConversionDialog || null;
-    queuedForcedRequest = buildConversionFixRequest(queuedForcedDialog);
-    setActivity("Fixing conversion error...", "neutral", true);
-    go.onclick();
-  };
+  /* ── event wiring ─────────────────────────────────────── */
   logToggle.onclick = () => {
     logsCollapsed = !logsCollapsed;
     applyLogCollapse();
   };
   applyLogCollapse();
-  hideFixConvertButton();
   setBusyIndicator(false);
-  refreshRevertButton();
+
+  /* preview bar buttons */
+  previewReturnBtn.onclick = exitPreview;
+  previewNewBtn.onclick = () => {
+    previewBar.style.display = "none";
+    clearChat();
+    openPanel();
+  };
+
+  /* new chat button */
+  newChatBtn.onclick = () => {
+    if (busy) return;
+    clearChat();
+  };
+
+  /* Enter to send */
+  promptEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !busy) {
+      e.preventDefault();
+      go.click();
+    }
+  });
+
+  /* auto-resize textarea */
+  promptEl.addEventListener("input", () => {
+    promptEl.style.height = "auto";
+    promptEl.style.height = Math.min(promptEl.scrollHeight, 120) + "px";
+  });
+
+  /* Escape to close */
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && backdrop.style.display !== "none" && !busy) {
+      closePanel();
+    }
+  });
+
+  /* init empty state */
+  renderEmptyState();
 
   /* ── resolve effective backend URL ───────────────────────── */
   const DEFAULT_SERVER = BACKEND.replace(/^https?:\/\//, "");
@@ -1491,10 +1494,11 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       targetName = "Maker";
     }
     return [
-      "ROLE: You are a Microsoft MakeCode assistant.",
+      "ROLE: You are a friendly Microsoft MakeCode assistant helping a student build a " + targetName + " project. You are having a conversation \u2013 be helpful, brief, and encouraging.",
       "HARD REQUIREMENT: Return ONLY Microsoft MakeCode Static JavaScript that the MakeCode decompiler can convert to BLOCKS for " + targetName + " with ZERO errors.",
-      "OPTIONAL FEEDBACK: You may send brief notes before the code. Prefix each note with FEEDBACK: .",
-      "RESPONSE FORMAT: After any feedback lines, output ONLY Microsoft MakeCode Static TypeScript with no markdown fences or extra prose.",
+      "FEEDBACK: Before writing code, provide 2\u20133 short FEEDBACK: lines. Explain your approach briefly: what the code will do, which APIs you chose, and any trade-offs. Write as if you are explaining to a student. Keep each line under 120 characters.",
+      "CONVERSATION CONTEXT: If CONVERSATION_HISTORY is provided, build on the previous exchanges. The user is continuing their project \u2013 modify or extend the existing code rather than starting from scratch, unless they ask otherwise.",
+      "RESPONSE FORMAT: After your FEEDBACK: lines, output ONLY MakeCode Static TypeScript with no markdown fences or extra prose.",
       "NO COMMENTS inside the code.",
       "ERROR FIXING: If PAGE_ERRORS are provided, treat them as failing diagnostics and prioritise resolving all of them in your output.",
       "BLOCKS CONVERSION: If CONVERSION_DIALOG is provided, ensure the output can be converted from JavaScript back to Blocks in MakeCode.",
@@ -1508,9 +1512,29 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     ].join("\n");
   };
 
-  const userFor = (request, currentCode, pageErrors, conversionDialog) => {
-    const header = "USER_REQUEST:\n" + request.trim();
-    const blocks = [header];
+  const userFor = (request, currentCode, pageErrors, conversionDialog, history) => {
+    const blocks = [];
+
+    /* include conversation history for multi-turn context */
+    if (history && history.length > 0) {
+      const histLines = ["<<<CONVERSATION_HISTORY>>>"];
+      for (const turn of history) {
+        if (turn.role === "user") {
+          histLines.push("User: " + String(turn.content || "").trim());
+        } else if (turn.role === "assistant") {
+          if (turn.feedback && turn.feedback.length) {
+            histLines.push("Assistant notes: " + turn.feedback.join("; "));
+          }
+          if (turn.code) {
+            histLines.push("Assistant code:\n" + turn.code);
+          }
+        }
+      }
+      histLines.push("<<<END_CONVERSATION_HISTORY>>>");
+      blocks.push(histLines.join("\n"));
+    }
+
+    blocks.push("USER_REQUEST:\n" + request.trim());
     const errors = (pageErrors || []).filter((item) => item && String(item).trim());
     if (errors.length) {
       blocks.push("<<<PAGE_ERRORS>>>\n- " + errors.join("\n- ") + "\n<<<END_PAGE_ERRORS>>>");
@@ -1785,40 +1809,71 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     });
   };
 
+  /* ── build conversation history for multi-turn ─────────── */
+  const buildConversationHistory = () => {
+    /* return all completed user/assistant turns (excluding the current in-flight one) */
+    const hist = [];
+    for (const msg of chatMessages) {
+      if (msg.role === "user") {
+        hist.push({ role: "user", content: msg.content });
+      } else if (msg.role === "assistant" && (msg.status === "done" || msg.status === "convert-error")) {
+        hist.push({ role: "assistant", feedback: msg.feedback || [], code: msg.code || "" });
+      }
+    }
+    /* remove the last item if it's the in-flight assistant placeholder */
+    if (hist.length && hist[hist.length - 1].role === "assistant" && !hist[hist.length - 1].code) {
+      hist.pop();
+    }
+    return hist;
+  };
+
   /* ── generate handler ────────────────────────────────────── */
-  go.onclick = () => {
+  const sendMessage = (forcedRequestOverride, forcedDialogOverride) => {
     if (busy) return;
+
+    const request = forcedRequestOverride || (promptEl.value || "").trim();
+    const forcedDialog = forcedDialogOverride || null;
+
+    /* add user message to chat */
+    if (!forcedRequestOverride) {
+      if (!request) {
+        setStatus("Idle");
+        logLine("Please enter a request.");
+        return;
+      }
+      addChatMessage({ role: "user", content: request });
+      promptEl.value = "";
+      promptEl.style.height = "auto";
+    }
+
+    /* add assistant placeholder */
+    const assistantIdx = addChatMessage({ role: "assistant", content: "Generating\u2026", status: "generating" });
+
     busy = true;
     setBusyIndicator(true);
-    showInteractionOverlay();
-    refreshRevertButton();
-    setActivity("", "neutral", true);
-
     clearLog();
-    renderFeedback([]);
-    hideFixConvertButton();
     setStatus("Working");
     logLine("Generating...");
+    go.disabled = true;
+    go.style.opacity = "0.7";
 
-    const request = (promptEl.value || "").trim();
-    const initialForcedRequest = queuedForcedRequest;
-    const initialForcedDialog = queuedForcedDialog;
-    queuedForcedRequest = "";
-    queuedForcedDialog = null;
     const mode = storageGet(STORAGE_MODE) || "byok";
     const target = storageGet(STORAGE_TARGET) || "microbit";
-    const originalText = go.textContent;
     const undoDepthBeforeGenerate = undoStack.length;
     generationController = new AbortController();
     const signal = generationController.signal;
-    let showDoneAnimation = false;
     let conversionRetryCount = 0;
-    go.textContent = "Generating...";
-    go.disabled = true;
-    go.style.opacity = "0.7";
-    go.style.cursor = "not-allowed";
+    let lastGeneratedCode = "";
+    let lastFeedback = [];
 
-    const runGenerationAttempt = (forcedRequest, forcedDialog, options) => {
+    const conversationHistory = buildConversationHistory();
+    /* exclude the user message we just added and the assistant placeholder */
+    if (conversationHistory.length >= 2) {
+      conversationHistory.pop(); /* assistant placeholder */
+      conversationHistory.pop(); /* user message just added */
+    }
+
+    const runGenerationAttempt = (forcedRequest, forcedDlg, options) => {
       const shouldSnapshot = !options || options.snapshot !== false;
       const editorCtxPromise = findMonacoCtx(18000, signal)
         .then((ctx) => {
@@ -1862,7 +1917,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         .then(([currentCode, pageContext]) => {
           throwIfAborted(signal);
           const pageErrors = pageContext && Array.isArray(pageContext.errors) ? pageContext.errors.slice() : [];
-          let conversionDialog = (pageContext && pageContext.conversionDialog) || forcedDialog || null;
+          let conversionDialog = (pageContext && pageContext.conversionDialog) || forcedDlg || null;
           if (conversionDialog) {
             lastConversionDialog = conversionDialog;
             const hasDialogPrefix = pageErrors.some((line) => /^ConvertDialog:/i.test(String(line)));
@@ -1891,8 +1946,9 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
               effectiveRequest = "Fix the current project by resolving all listed page errors while preserving existing behaviour unless a change is needed for the fix.";
               logLine("No prompt entered; using automatic error-fix request.");
             }
-            setActivity("No prompt entered; fixing detected errors.", "neutral", true);
           }
+
+          updateAssistantMessage(assistantIdx, { content: "Calling AI model\u2026", status: "generating" });
 
           if (mode === "managed") {
             logLine("Mode: Managed backend.");
@@ -1904,22 +1960,32 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
           if (!apiKey) throw new Error("Enter API key for BYOK mode (open Settings).");
           const model = storageGet(STORAGE_MODEL) || "";
 
+          /* build conversation-aware history (exclude current turn) */
+          const priorHistory = [];
+          for (let i = 0; i < chatMessages.length - 2; i++) {
+            const m = chatMessages[i];
+            if (m.role === "user") priorHistory.push({ role: "user", content: m.content });
+            else if (m.role === "assistant" && m.code) priorHistory.push({ role: "assistant", feedback: m.feedback || [], code: m.code });
+          }
+
           logLine("Mode: BYOK.");
-          return askValidated(provider, apiKey, model, sysFor(target), userFor(effectiveRequest, currentCode, pageErrors, conversionDialog), target, signal);
+          return askValidated(provider, apiKey, model, sysFor(target), userFor(effectiveRequest, currentCode, pageErrors, conversionDialog, priorHistory), target, signal);
         })
         .then((result) => {
           throwIfAborted(signal);
           const feedback = result && Array.isArray(result.feedback) ? result.feedback : [];
-          renderFeedback(feedback);
+          lastFeedback = feedback;
 
           const code = extractCode(result && result.code ? result.code : "");
+          lastGeneratedCode = code;
           if (!code) {
             setStatus("No code");
-            setActivity("No code returned.", "error");
             logLine("No code returned.");
+            updateAssistantMessage(assistantIdx, { content: "No code was returned by the model.", status: "error", feedback });
             return;
           }
 
+          updateAssistantMessage(assistantIdx, { content: "Applying code to MakeCode\u2026", status: "generating", feedback });
           setStatus("Pasting");
           return pasteToMakeCode(code, { signal, snapshot: shouldSnapshot })
             .catch((error) => {
@@ -1929,17 +1995,13 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
               if (!/grey JavaScript block/i.test(message)) throw error;
               logLine("Live decompile check failed: " + message);
               logLine("Applying minimal fallback stub.");
-              const fallbackFeedback = feedback.concat(["Live editor fallback: " + message]);
-              renderFeedback(fallbackFeedback);
               return pasteToMakeCode(stubForTarget(target), { snapshot: false, signal });
             })
             .then(() => {
               throwIfAborted(signal);
-              hideFixConvertButton();
               setStatus("Done");
-              showDoneAnimation = true;
-              setActivity("Generation complete.", "success");
               logLine("Pasted and switched back to Blocks.");
+              updateAssistantMessage(assistantIdx, { status: "done", feedback, code: lastGeneratedCode, content: "" });
             });
         });
     };
@@ -1949,23 +2011,21 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         const shouldRestore = undoStack.length > undoDepthBeforeGenerate;
         if (!shouldRestore) {
           setStatus("Cancelled");
-          setActivity("Generation cancelled.", "neutral");
           logLine("Generation cancelled.");
+          updateAssistantMessage(assistantIdx, { status: "cancelled", content: "Generation cancelled." });
           return;
         }
-        setStatus("Cancelling");
-        setActivity("Generation cancelled. Restoring previous code...", "neutral", true);
         logLine("Generation cancelled after code updates. Restoring previous snapshot...");
         return revertEditor()
           .then(() => {
             setStatus("Cancelled");
-            setActivity("Generation cancelled. Previous code restored.", "neutral");
             logLine("Previous code restored after cancellation.");
+            updateAssistantMessage(assistantIdx, { status: "cancelled", content: "Generation cancelled. Previous code restored." });
           })
           .catch((restoreError) => {
             setStatus("Error");
-            setActivity("Generation cancelled but restore failed. Check logs.", "error", true);
             logLine("Restore after cancellation failed: " + (restoreError && restoreError.message ? restoreError.message : String(restoreError)));
+            updateAssistantMessage(assistantIdx, { status: "error", content: "Cancelled, but could not restore previous code." });
           });
       }
 
@@ -1975,128 +2035,63 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         if (conversionRetryCount < 1) {
           conversionRetryCount += 1;
           logLine("MakeCode could not convert to Blocks. Retrying once with a conversion-fix prompt.");
-          setStatus("Retrying");
-          setActivity("MakeCode couldn't convert to Blocks. Attempting auto-fix...", "neutral", true);
+          updateAssistantMessage(assistantIdx, { content: "Fixing block conversion\u2026", status: "generating" });
           return runGenerationAttempt(buildConversionFixRequest(dialog), dialog, { snapshot: false }).catch(handleGenerationFailure);
         }
-        showFixConvertButton(dialog);
         setStatus("Needs fix");
-        setActivity("Still cannot convert to Blocks. Click \"Fix convert error\".", "error", true);
-        logLine("Still unable to convert to Blocks after retry. Use 'Fix convert error' to try again.");
+        logLine("Still unable to convert to Blocks after retry.");
+        updateAssistantMessage(assistantIdx, { status: "convert-error", feedback: lastFeedback, content: "", code: lastGeneratedCode });
         return;
       }
 
       const message = error && error.message ? error.message : String(error);
-      if (message === "Please enter a request.") {
-        setStatus("Idle");
-        setActivity("Please enter a request.", "error");
-        logLine("Please enter a request.");
-        return;
-      }
-
       setStatus("Error");
-      setActivity("Generation failed. Check logs.", "error", true);
       logLine("Request failed: " + message);
+      updateAssistantMessage(assistantIdx, { status: "error", content: message });
     };
 
-    runGenerationAttempt(initialForcedRequest, initialForcedDialog)
+    runGenerationAttempt(forcedRequestOverride || null, forcedDialog)
       .catch(handleGenerationFailure)
       .finally(() => {
         generationController = null;
         busy = false;
         setBusyIndicator(false);
-        hideInteractionOverlay(showDoneAnimation);
-        go.textContent = originalText;
         go.disabled = false;
         go.style.opacity = "";
-        go.style.cursor = "pointer";
-        refreshRevertButton();
       });
   };
 
-  revertBtn.onclick = () => {
-    if (revertBtn.disabled || busy) return;
+  go.onclick = () => sendMessage();
+
+  /* ── handle revert from chat action button ───────────── */
+  const handleRevert = () => {
+    if (busy || !undoStack.length) return;
     busy = true;
     setBusyIndicator(true);
-    refreshRevertButton();
-    setStatus("Reverting");
-    setActivity("", "neutral", true);
     logLine("Reverting to previous snapshot...");
     revertEditor()
       .then(() => {
-        setStatus("Reverted");
-        setActivity("Revert complete.", "success");
-        logLine("Revert complete: restored previous code and switched back to Blocks.");
+        logLine("Revert complete.");
+        /* add a system message to chat */
+        addChatMessage({ role: "assistant", content: "Reverted to previous code.", status: "cancelled" });
       })
       .catch((error) => {
-        setStatus("Error");
-        setActivity("Revert failed. Check logs.", "error", true);
         logLine("Revert failed: " + (error && error.message ? error.message : String(error)));
       })
       .finally(() => {
         busy = false;
         setBusyIndicator(false);
-        refreshRevertButton();
       });
   };
 
-  /* ── drag (all headers) ──────────────────────────────────── */
-  (function enableDrag() {
-    let dragging = false;
-    let ox = 0;
-    let oy = 0;
-    let sx = 0;
-    let sy = 0;
-    const onDown = (event) => {
-      dragging = true;
-      ox = event.clientX;
-      oy = event.clientY;
-      const rect = ui.getBoundingClientRect();
-      sx = rect.left;
-      sy = rect.top;
-      document.body.style.userSelect = "none";
-    };
-    headers.forEach((h) => h.addEventListener("mousedown", onDown));
-    window.addEventListener("mousemove", (event) => {
-      if (!dragging) return;
-      const nextX = sx + (event.clientX - ox);
-      const nextY = sy + (event.clientY - oy);
-      ui.style.left = Math.max(0, Math.min(window.innerWidth - ui.offsetWidth, nextX)) + "px";
-      ui.style.top = Math.max(0, Math.min(window.innerHeight - 60, nextY)) + "px";
-      ui.style.right = "auto";
-      ui.style.bottom = "auto";
-    });
-    window.addEventListener("mouseup", () => {
-      dragging = false;
-      document.body.style.userSelect = "";
-    });
-  })();
+  /* ── handle fix conversion from chat action button ──── */
+  const handleFixConvert = () => {
+    if (busy) return;
+    const dialog = lastConversionDialog || null;
+    const fixRequest = buildConversionFixRequest(dialog);
+    addChatMessage({ role: "user", content: "Fix the block conversion error" });
+    sendMessage(fixRequest, dialog);
+  };
 
-  /* ── resize ──────────────────────────────────────────────── */
-  (function enableResize() {
-    let resizing = false;
-    let rx = 0;
-    let ry = 0;
-    let startW = 0;
-    let startH = 0;
-    resizer.addEventListener("mousedown", (event) => {
-      resizing = true;
-      rx = event.clientX;
-      ry = event.clientY;
-      startW = ui.offsetWidth;
-      startH = ui.offsetHeight;
-      document.body.style.userSelect = "none";
-    });
-    window.addEventListener("mousemove", (event) => {
-      if (!resizing) return;
-      const width = Math.max(380, startW + (event.clientX - rx));
-      const height = Math.max(260, startH + (event.clientY - ry));
-      ui.style.width = width + "px";
-      ui.style.height = height + "px";
-    });
-    window.addEventListener("mouseup", () => {
-      resizing = false;
-      document.body.style.userSelect = "";
-    });
-  })();
+  /* (revert and drag/resize removed — handled by chat UI buttons) */
 })();
