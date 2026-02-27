@@ -191,8 +191,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     /* input area */
     + '<div style="flex-shrink:0;border-top:1px solid #1f2b47;padding:12px 16px;background:#0d1528">'
     + '  <textarea id="p" rows="2" placeholder="Describe what you want the block code to do\u2026" style="width:100%;resize:none;min-height:44px;max-height:120px;padding:10px 12px;border-radius:10px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef;font-size:13px;line-height:1.4;box-sizing:border-box;font-family:inherit"></textarea>'
-    + '  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">'
-    + '    <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#8899bb;cursor:pointer"><input id="inc" type="checkbox" checked style="cursor:pointer">Use current code</label>'
+    + '  <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:8px">'
     + '    <div style="display:flex;gap:8px;align-items:center">'
     + '      <button id="new-chat-btn" style="display:none;padding:6px 14px;border:1px solid #29324e;border-radius:8px;background:transparent;color:#8899bb;font-size:12px;font-weight:500;cursor:pointer">New</button>'
     + '      <button id="go" style="padding:8px 20px;border:none;border-radius:8px;background:#3454D1;color:#fff;font-weight:600;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">Send <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>'
@@ -402,7 +401,6 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const busyIndicator = $("#busy-indicator");
   const gearBtn = $("#gear");
   const promptEl = $("#p");
-  const includeCurrent = $("#inc");
   const go = $("#go");
   const chatMessagesEl = $("#chat-messages");
   const newChatBtn = $("#new-chat-btn");
@@ -501,6 +499,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   let queuedForcedRequest = "";
   let queuedForcedDialog = null;
   let lastConversionDialog = null;
+  let freshStartOnNextSend = false;
 
   /* chat conversation state */
   let chatMessages = [];       /* {role,content,feedback?,code?,status?} */
@@ -730,8 +729,11 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   /* preview bar buttons */
   previewReturnBtn.onclick = exitPreview;
   previewNewBtn.onclick = () => {
+    if (busy) return;
     previewBar.style.display = "none";
     clearChat();
+    freshStartOnNextSend = true;
+    logLine("New chat started. Next send will start from scratch.");
     openPanel();
   };
 
@@ -739,6 +741,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   newChatBtn.onclick = () => {
     if (busy) return;
     clearChat();
+    freshStartOnNextSend = true;
+    logLine("New chat started. Next send will start from scratch.");
   };
 
   /* Enter to send */
@@ -1497,7 +1501,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       "ROLE: You are a friendly Microsoft MakeCode assistant helping a student build a " + targetName + " project. You are having a conversation \u2013 be helpful, brief, and encouraging.",
       "HARD REQUIREMENT: Return ONLY Microsoft MakeCode Static JavaScript that the MakeCode decompiler can convert to BLOCKS for " + targetName + " with ZERO errors.",
       "FEEDBACK: Before writing code, provide 2\u20133 short FEEDBACK: lines. Explain your approach briefly: what the code will do, which APIs you chose, and any trade-offs. Write as if you are explaining to a student. Keep each line under 120 characters.",
-      "CONVERSATION CONTEXT: If CONVERSATION_HISTORY is provided, build on the previous exchanges. The user is continuing their project \u2013 modify or extend the existing code rather than starting from scratch, unless they ask otherwise.",
+      "CONVERSATION CONTEXT: If RECENT_CHAT is provided, use only that recent context. Treat CURRENT_CODE as the source of truth for project state.",
+      "CONTEXT LIMITS: CURRENT_CODE may include a truncation note if the project is large. When truncated, make conservative edits and preserve existing patterns.",
       "RESPONSE FORMAT: After your FEEDBACK: lines, output ONLY MakeCode Static TypeScript with no markdown fences or extra prose.",
       "NO COMMENTS inside the code.",
       "ERROR FIXING: If PAGE_ERRORS are provided, treat them as failing diagnostics and prioritise resolving all of them in your output.",
@@ -1512,25 +1517,46 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     ].join("\n");
   };
 
-  const userFor = (request, currentCode, pageErrors, conversionDialog, history) => {
+  const MAX_CURRENT_CODE_PROMPT_CHARS = 12000;
+  const CURRENT_CODE_TRUNCATION_MARKER = "\n// ... CURRENT_CODE_TRUNCATED ...\n";
+
+  const boundCurrentCodeForPrompt = (currentCode) => {
+    const source = String(currentCode || "");
+    if (!source.trim()) {
+      return { text: "", truncated: false, omittedChars: 0 };
+    }
+    if (source.length <= MAX_CURRENT_CODE_PROMPT_CHARS) {
+      return { text: source, truncated: false, omittedChars: 0 };
+    }
+
+    const budget = Math.max(0, MAX_CURRENT_CODE_PROMPT_CHARS - CURRENT_CODE_TRUNCATION_MARKER.length);
+    const headBudget = Math.floor(budget * 0.65);
+    const tailBudget = Math.max(0, budget - headBudget);
+    const head = source.slice(0, headBudget).trimEnd();
+    const tail = source.slice(source.length - tailBudget).trimStart();
+    const omittedChars = Math.max(0, source.length - (head.length + tail.length));
+
+    return {
+      text: head + CURRENT_CODE_TRUNCATION_MARKER + tail,
+      truncated: true,
+      omittedChars
+    };
+  };
+
+  const userFor = (request, currentCode, pageErrors, conversionDialog, recentChat) => {
     const blocks = [];
 
-    /* include conversation history for multi-turn context */
-    if (history && history.length > 0) {
-      const histLines = ["<<<CONVERSATION_HISTORY>>>"];
-      for (const turn of history) {
+    /* include bounded recent chat context (no historical code payloads) */
+    if (recentChat && recentChat.length > 0) {
+      const histLines = ["<<<RECENT_CHAT>>>"];
+      for (const turn of recentChat) {
         if (turn.role === "user") {
-          histLines.push("User: " + String(turn.content || "").trim());
+          histLines.push("Last user message: " + String(turn.content || "").trim());
         } else if (turn.role === "assistant") {
-          if (turn.feedback && turn.feedback.length) {
-            histLines.push("Assistant notes: " + turn.feedback.join("; "));
-          }
-          if (turn.code) {
-            histLines.push("Assistant code:\n" + turn.code);
-          }
+          histLines.push("Last assistant notes: " + String(turn.notes || "").trim());
         }
       }
-      histLines.push("<<<END_CONVERSATION_HISTORY>>>");
+      histLines.push("<<<END_RECENT_CHAT>>>");
       blocks.push(histLines.join("\n"));
     }
 
@@ -1547,8 +1573,12 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       if (dialogDescription) lines.push("Message: " + dialogDescription);
       blocks.push("<<<CONVERSION_DIALOG>>>\n" + lines.join("\n") + "\n<<<END_CONVERSION_DIALOG>>>");
     }
-    if (currentCode && currentCode.trim().length) {
-      blocks.push("<<<CURRENT_CODE>>>\n" + currentCode + "\n<<<END_CURRENT_CODE>>>");
+    const boundedCurrentCode = boundCurrentCodeForPrompt(currentCode);
+    if (boundedCurrentCode.text) {
+      if (boundedCurrentCode.truncated) {
+        blocks.push("<<<CURRENT_CODE_NOTE>>>\nCurrent code was truncated for prompt size. Omitted approx " + boundedCurrentCode.omittedChars + " chars from the middle.\n<<<END_CURRENT_CODE_NOTE>>>");
+      }
+      blocks.push("<<<CURRENT_CODE>>>\n" + boundedCurrentCode.text + "\n<<<END_CURRENT_CODE>>>");
     }
     return blocks.join("\n\n");
   };
@@ -1809,22 +1839,63 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     });
   };
 
-  /* ── build conversation history for multi-turn ─────────── */
-  const buildConversationHistory = () => {
-    /* return all completed user/assistant turns (excluding the current in-flight one) */
-    const hist = [];
-    for (const msg of chatMessages) {
-      if (msg.role === "user") {
-        hist.push({ role: "user", content: msg.content });
-      } else if (msg.role === "assistant" && (msg.status === "done" || msg.status === "convert-error")) {
-        hist.push({ role: "assistant", feedback: msg.feedback || [], code: msg.code || "" });
+  const RECENT_CHAT_TOTAL_CHARS = 1200;
+  const RECENT_CHAT_USER_CHARS = 420;
+  const RECENT_CHAT_ASSISTANT_CHARS = 420;
+  const RECENT_CHAT_TRUNCATION_SUFFIX = " [truncated]";
+
+  const clampPromptText = (value, maxChars) => {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (!text) return "";
+    if (!maxChars || maxChars < 1 || text.length <= maxChars) return text;
+    if (maxChars <= RECENT_CHAT_TRUNCATION_SUFFIX.length + 1) {
+      return text.slice(0, maxChars);
+    }
+    return text.slice(0, maxChars - RECENT_CHAT_TRUNCATION_SUFFIX.length).trimEnd() + RECENT_CHAT_TRUNCATION_SUFFIX;
+  };
+
+  /* Keep prompt context bounded: only last user message + last assistant notes. */
+  const buildRecentChatContext = () => {
+    let lastUser = "";
+    let lastAssistant = "";
+
+    for (let i = chatMessages.length - 1; i >= 0; i--) {
+      const msg = chatMessages[i];
+      if (!msg) continue;
+
+      if (!lastAssistant && msg.role === "assistant") {
+        const notes = Array.isArray(msg.feedback) && msg.feedback.length
+          ? msg.feedback.join(" | ")
+          : (msg.content || "");
+        lastAssistant = clampPromptText(notes, RECENT_CHAT_ASSISTANT_CHARS);
+        continue;
       }
+
+      if (!lastUser && msg.role === "user" && msg.content) {
+        lastUser = clampPromptText(msg.content, RECENT_CHAT_USER_CHARS);
+      }
+
+      if (lastUser && lastAssistant) break;
     }
-    /* remove the last item if it's the in-flight assistant placeholder */
-    if (hist.length && hist[hist.length - 1].role === "assistant" && !hist[hist.length - 1].code) {
-      hist.pop();
-    }
-    return hist;
+
+    const context = [];
+    let used = 0;
+    const pushTurn = (turn) => {
+      if (!turn) return;
+      const text = turn.role === "user" ? turn.content : turn.notes;
+      if (!text) return;
+      if (used >= RECENT_CHAT_TOTAL_CHARS) return;
+      const remaining = RECENT_CHAT_TOTAL_CHARS - used;
+      const clipped = clampPromptText(text, remaining);
+      if (!clipped) return;
+      if (turn.role === "user") context.push({ role: "user", content: clipped });
+      else context.push({ role: "assistant", notes: clipped });
+      used += clipped.length;
+    };
+
+    pushTurn(lastUser ? { role: "user", content: lastUser } : null);
+    pushTurn(lastAssistant ? { role: "assistant", notes: lastAssistant } : null);
+    return context;
   };
 
   /* ── generate handler ────────────────────────────────────── */
@@ -1833,6 +1904,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
     const request = forcedRequestOverride || (promptEl.value || "").trim();
     const forcedDialog = forcedDialogOverride || null;
+    const recentChatContext = buildRecentChatContext();
+    let includeCurrentForThisSend = true;
 
     /* add user message to chat */
     if (!forcedRequestOverride) {
@@ -1840,6 +1913,10 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         setStatus("Idle");
         logLine("Please enter a request.");
         return;
+      }
+      if (freshStartOnNextSend) {
+        includeCurrentForThisSend = false;
+        freshStartOnNextSend = false;
       }
       addChatMessage({ role: "user", content: request });
       promptEl.value = "";
@@ -1866,13 +1943,6 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     let lastGeneratedCode = "";
     let lastFeedback = [];
 
-    const conversationHistory = buildConversationHistory();
-    /* exclude the user message we just added and the assistant placeholder */
-    if (conversationHistory.length >= 2) {
-      conversationHistory.pop(); /* assistant placeholder */
-      conversationHistory.pop(); /* user message just added */
-    }
-
     const runGenerationAttempt = (forcedRequest, forcedDlg, options) => {
       const shouldSnapshot = !options || options.snapshot !== false;
       const editorCtxPromise = findMonacoCtx(18000, signal)
@@ -1885,7 +1955,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
           return null;
         });
 
-      const currentPromise = includeCurrent.checked
+      const currentPromise = includeCurrentForThisSend
         ? editorCtxPromise
           .then((ctx) => {
             throwIfAborted(signal);
@@ -1901,7 +1971,10 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
             logLine("Could not read current code.");
             return "";
           })
-        : Promise.resolve("");
+        : Promise.resolve("").then(() => {
+          logLine("Fresh start active: skipping current code for this send.");
+          return "";
+        });
 
       const pageContextPromise = editorCtxPromise
         .then((ctx) => {
@@ -1960,16 +2033,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
           if (!apiKey) throw new Error("Enter API key for BYOK mode (open Settings).");
           const model = storageGet(STORAGE_MODEL) || "";
 
-          /* build conversation-aware history (exclude current turn) */
-          const priorHistory = [];
-          for (let i = 0; i < chatMessages.length - 2; i++) {
-            const m = chatMessages[i];
-            if (m.role === "user") priorHistory.push({ role: "user", content: m.content });
-            else if (m.role === "assistant" && m.code) priorHistory.push({ role: "assistant", feedback: m.feedback || [], code: m.code });
-          }
-
           logLine("Mode: BYOK.");
-          return askValidated(provider, apiKey, model, sysFor(target), userFor(effectiveRequest, currentCode, pageErrors, conversionDialog, priorHistory), target, signal);
+          return askValidated(provider, apiKey, model, sysFor(target), userFor(effectiveRequest, currentCode, pageErrors, conversionDialog, recentChatContext), target, signal);
         })
         .then((result) => {
           throwIfAborted(signal);
