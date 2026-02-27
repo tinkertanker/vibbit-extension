@@ -1615,7 +1615,6 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     "Rabbit",
     "Cow",
     "QuarterNote",
-    "EigthNote",
     "EighthNote",
     "Pitchfork",
     "Target",
@@ -1628,6 +1627,8 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     "SmallSquare",
     "Scissors"
   ];
+
+  const MICROBIT_DEPRECATED_ICON_ALIASES = ["EigthNote"];
 
   const MICROBIT_ARROW_NAMES = [
     "North",
@@ -1660,7 +1661,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     TouchPin: new Set(["P0", "P1", "P2"]),
     Dimension: new Set(["X", "Y", "Z", "Strength"]),
     Rotation: new Set(["Pitch", "Roll"]),
-    IconNames: new Set(MICROBIT_ICON_NAMES),
+    IconNames: new Set([...MICROBIT_ICON_NAMES, ...MICROBIT_DEPRECATED_ICON_ALIASES]),
     ArrowNames: new Set(MICROBIT_ARROW_NAMES),
     DigitalPin: new Set(["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14", "P15", "P16", "P19", "P20"]),
     AnalogPin: new Set(["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14", "P15", "P16", "P19", "P20"]),
@@ -2069,15 +2070,14 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     return args.filter((arg) => arg.length > 0);
   };
 
-  const findCallArguments = (code, callPath) => {
-    const searchable = stripNonCodeSegments(code);
+  const findCallArguments = (searchableCode, callPath) => {
     const callRe = new RegExp("\\b" + escapeRegExp(callPath) + "\\s*\\(", "g");
     const matches = [];
     let match;
-    while ((match = callRe.exec(searchable))) {
+    while ((match = callRe.exec(searchableCode))) {
       const openParenOffset = match[0].lastIndexOf("(");
       const openParenIndex = openParenOffset >= 0 ? (match.index + openParenOffset) : -1;
-      const segment = readBalancedParentheses(searchable, openParenIndex);
+      const segment = readBalancedParentheses(searchableCode, openParenIndex);
       if (!segment) continue;
       matches.push({ argsText: segment.inner, index: match.index });
       callRe.lastIndex = Math.max(callRe.lastIndex, segment.end + 1);
@@ -2086,9 +2086,10 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   };
 
   const validateCallSignatures = (code, signatures) => {
+    const searchableCode = stripNonCodeSegments(code);
     const violations = [];
     for (const signature of signatures) {
-      const calls = findCallArguments(code, signature.call);
+      const calls = findCallArguments(searchableCode, signature.call);
       if (!calls.length) continue;
       for (const callSite of calls) {
         const argCount = splitTopLevelArguments(callSite.argsText).length;
@@ -2246,6 +2247,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         "If the request matches a built-in icon name (for example duck, heart, skull), prefer basic.showIcon(IconNames.<Name>).",
         "For known icons, do NOT hand-draw LED art with basic.showLeds(`...`) unless the user explicitly asks for a custom pattern.",
         "Valid IconNames: " + MICROBIT_ICON_NAMES.map((name) => "IconNames." + name).join(", "),
+        "Deprecated alias accepted only for compatibility: IconNames.EigthNote (prefer IconNames.EighthNote).",
         "Valid ArrowNames: " + MICROBIT_ARROW_NAMES.map((name) => "ArrowNames." + name).join(", "),
         "Use exact event enums: Button.A, Button.B, Button.AB; Gesture." + MICROBIT_GESTURE_NAMES.join(", Gesture."),
         "Use only valid enum members from pxt-microbit enums.d.ts (Button, Gesture, TouchPin, Dimension, Rotation, DigitalPin, AnalogPin, PulseValue, BeatFraction).",

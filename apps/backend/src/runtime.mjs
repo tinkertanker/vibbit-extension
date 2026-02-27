@@ -487,7 +487,6 @@ const MICROBIT_ICON_NAMES = [
   "Rabbit",
   "Cow",
   "QuarterNote",
-  "EigthNote",
   "EighthNote",
   "Pitchfork",
   "Target",
@@ -500,6 +499,8 @@ const MICROBIT_ICON_NAMES = [
   "SmallSquare",
   "Scissors"
 ];
+
+const MICROBIT_DEPRECATED_ICON_ALIASES = ["EigthNote"];
 
 const MICROBIT_ARROW_NAMES = [
   "North",
@@ -532,7 +533,7 @@ const MICROBIT_ENUM_MEMBER_SETS = Object.freeze({
   TouchPin: new Set(["P0", "P1", "P2"]),
   Dimension: new Set(["X", "Y", "Z", "Strength"]),
   Rotation: new Set(["Pitch", "Roll"]),
-  IconNames: new Set(MICROBIT_ICON_NAMES),
+  IconNames: new Set([...MICROBIT_ICON_NAMES, ...MICROBIT_DEPRECATED_ICON_ALIASES]),
   ArrowNames: new Set(MICROBIT_ARROW_NAMES),
   DigitalPin: new Set(["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14", "P15", "P16", "P19", "P20"]),
   AnalogPin: new Set(["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14", "P15", "P16", "P19", "P20"]),
@@ -945,15 +946,14 @@ function splitTopLevelArguments(source) {
   return args.filter((arg) => arg.length > 0);
 }
 
-function findCallArguments(code, callPath) {
-  const searchable = stripNonCodeSegments(code);
+function findCallArguments(searchableCode, callPath) {
   const callRe = new RegExp("\\b" + escapeRegExp(callPath) + "\\s*\\(", "g");
   const matches = [];
   let match;
-  while ((match = callRe.exec(searchable))) {
+  while ((match = callRe.exec(searchableCode))) {
     const openParenOffset = match[0].lastIndexOf("(");
     const openParenIndex = openParenOffset >= 0 ? (match.index + openParenOffset) : -1;
-    const segment = readBalancedParentheses(searchable, openParenIndex);
+    const segment = readBalancedParentheses(searchableCode, openParenIndex);
     if (!segment) continue;
     matches.push({ argsText: segment.inner, index: match.index });
     callRe.lastIndex = Math.max(callRe.lastIndex, segment.end + 1);
@@ -962,9 +962,10 @@ function findCallArguments(code, callPath) {
 }
 
 function validateCallSignatures(code, signatures) {
+  const searchableCode = stripNonCodeSegments(code);
   const violations = [];
   for (const signature of signatures) {
-    const calls = findCallArguments(code, signature.call);
+    const calls = findCallArguments(searchableCode, signature.call);
     if (!calls.length) continue;
     for (const callSite of calls) {
       const argCount = splitTopLevelArguments(callSite.argsText).length;
@@ -1147,7 +1148,7 @@ const TARGET_CONFIGS = {
       "basic: showNumber(n), showString(s), showIcon(IconNames), showLeds(`...`), showArrow(ArrowNames), clearScreen(), forever(handler), pause(ms)",
       "input: onButtonPressed(Button.A/B/AB, handler), onGesture(Gesture.Shake/Tilt/..., handler), onPinPressed(TouchPin.P0/P1/P2, handler), buttonIsPressed(Button), temperature(), lightLevel(), acceleration(Dimension.X/Y/Z), compassHeading(), rotation(Rotation), magneticForce(Dimension), runningTime()",
       "music: playTone(Note, BeatFraction), ringTone(freq), rest(BeatFraction), beat(BeatFraction), tempo(), setTempo(bpm), changeTempoBy(delta)",
-      "led: plot(x,y), unplot(x,y), toggle(x,y), point(x,y), brightness(), setBrightness(n), plotBarGraph(value, high), enable(on)",
+      "led: plot(x,y), unplot(x,y), toggle(x,y), point(x,y), brightness(), setBrightness(n), plotBarGraph(value, high, valueToConsole?), enable(on)",
       "radio: sendNumber(n), sendString(s), sendValue(name, n), onReceivedNumber(handler), onReceivedString(handler), setGroup(id), setTransmitPower(n), setTransmitSerialNumber(on)",
       "game: createSprite(x,y), .move(n), .turn(Direction,degrees), .ifOnEdgeBounce(), .isTouching(other), .isTouchingEdge(), addScore(n), score(), setScore(n), setLife(n), addLife(n), removeLife(n), gameOver(), startCountdown(ms)",
       "pins: digitalReadPin(DigitalPin), digitalWritePin(DigitalPin,value), analogReadPin(AnalogPin), analogWritePin(AnalogPin,value), servoWritePin(AnalogPin,value), map(value,fromLow,fromHigh,toLow,toHigh), onPulsed(DigitalPin,PulseValue,handler), analogSetPitchPin(AnalogPin), analogPitch(freq,ms)",
@@ -1228,6 +1229,7 @@ function systemPromptFor(target) {
       "- If the request matches a built-in icon name (for example duck, heart, skull), prefer basic.showIcon(IconNames.<Name>).",
       "- For known icons, do NOT hand-draw LED art with basic.showLeds(`...`) unless the user explicitly asks for a custom pattern.",
       "- Valid IconNames: " + MICROBIT_ICON_NAMES.map((name) => "IconNames." + name).join(", "),
+      "- Deprecated alias accepted only for compatibility: IconNames.EigthNote (prefer IconNames.EighthNote).",
       "- Valid ArrowNames: " + MICROBIT_ARROW_NAMES.map((name) => "ArrowNames." + name).join(", "),
       "- Use exact event enums: Button.A, Button.B, Button.AB; Gesture." + MICROBIT_GESTURE_NAMES.join(", Gesture."),
       "- Use only valid enum members from pxt-microbit enums.d.ts (Button, Gesture, TouchPin, Dimension, Rotation, DigitalPin, AnalogPin, PulseValue, BeatFraction).",
