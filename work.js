@@ -1773,245 +1773,409 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   };
 
   /* ── code processing ─────────────────────────────────────── */
-  const sanitizeMakeCode = (input) => {
-    if (!input) return "";
-    let text = String(input);
-    if (/^```/.test(text)) text = text.replace(/^```[\s\S]*?\n/, "").replace(/```\s*$/, "");
-    text = text.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "\t");
-    text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-    text = text.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, "\"");
-    text = text.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\u00A0/g, " ");
-    text = text.replace(/^`+|`+$/g, "");
-    return text.trim();
-  };
-
-  const normaliseFeedback = (items, fallback) => {
-    const seen = new Set();
-    const list = [];
-    (Array.isArray(items) ? items : []).forEach((item) => {
-      const text = String(item || "").trim();
-      if (!text) return;
-      const key = text.toLowerCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      list.push(text);
-    });
-    if (!list.length && fallback) list.push(String(fallback).trim());
-    return list;
-  };
-
-  const extractJsonObjectCandidates = (text) => {
-    const matches = [];
-    let depth = 0;
-    let start = -1;
-    let inString = false;
-    let escaped = false;
-
-    for (let i = 0; i < text.length; i += 1) {
-      const char = text[i];
-
-      if (inString) {
-        if (escaped) {
-          escaped = false;
-          continue;
-        }
-        if (char === "\\") {
-          escaped = true;
-          continue;
-        }
-        if (char === "\"") inString = false;
-        continue;
-      }
-
-      if (char === "\"") {
-        inString = true;
-        continue;
-      }
-
-      if (char === "{") {
-        if (depth === 0) start = i;
-        depth += 1;
-        continue;
-      }
-
-      if (char === "}" && depth > 0) {
-        depth -= 1;
-        if (depth === 0 && start !== -1) {
-          matches.push(text.slice(start, i + 1));
-          start = -1;
-        }
-      }
+  /* ── shared compat core (generated) ───────────────────── */
+  // BEGIN_SHARED_COMPAT_CORE
+  const {
+    sanitizeMakeCode,
+    normaliseFeedback,
+    resolvePromptTargetContext,
+    buildUserPrompt,
+    parseModelOutput,
+    validateBlocksCompatibility,
+    stubForTarget,
+    extractGeminiText,
+  } = (() => {
+    function sanitizeMakeCode(input) {
+      if (!input) return "";
+      let text = String(input);
+      if (/^```/.test(text)) text = text.replace(/^```[\s\S]*?\n/, "").replace(/```\s*$/, "");
+      text = text.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+      text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      text = text.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, "\"");
+      text = text.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\u00A0/g, " ");
+      text = text.replace(/^`+|`+$/g, "");
+      return text.trim();
     }
 
-    return matches;
-  };
-
-  const parseJsonObjectsFromText = (raw) => {
-    const text = String(raw || "").trim();
-    if (!text) return [];
-    const candidates = [text];
-    const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fencedMatch && fencedMatch[1]) candidates.push(fencedMatch[1].trim());
-    candidates.push(...extractJsonObjectCandidates(text));
-    const parsedObjects = [];
-    const seen = new Set();
-    for (const candidate of candidates) {
-      const source = String(candidate || "").trim();
-      if (!source || seen.has(source)) continue;
-      seen.add(source);
-      try {
-        const parsed = JSON.parse(source);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          parsedObjects.push(parsed);
-        }
-      } catch (error) {
+    function normaliseFeedback(items, fallback = "") {
+      const seen = new Set();
+      const list = [];
+      for (const item of Array.isArray(items) ? items : []) {
+        const text = String(item || "").trim();
+        if (!text) continue;
+        const key = text.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        list.push(text);
       }
+      if (!list.length && fallback) list.push(fallback);
+      return list;
     }
-    return parsedObjects;
-  };
 
-  const isModelOutputObject = (parsed) => {
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
-    return Object.prototype.hasOwnProperty.call(parsed, "code");
-  };
-
-  const extractCode = (raw) => {
-    if (!raw) return "";
-    const match = String(raw).match(/```[a-z]*\n([\s\S]*?)```/i);
-    const code = match ? match[1] : raw;
-    return sanitizeMakeCode(code);
-  };
-
-  const parseModelOutput = (raw) => {
-    const parsedObjects = parseJsonObjectsFromText(raw);
-    for (const parsed of parsedObjects) {
-      if (!isModelOutputObject(parsed)) continue;
-      const feedback = Array.isArray(parsed.feedback)
-        ? parsed.feedback
-        : (parsed.feedback == null ? [] : [parsed.feedback]);
+    function resolvePromptTargetContext(target) {
+      if (target === "arcade") {
+        return {
+          targetName: "Arcade",
+          namespaceList: "controller,game,scene,sprites,info,music,effects"
+        };
+      }
+      if (target === "maker") {
+        return {
+          targetName: "Maker",
+          namespaceList: "pins,input,loops,music"
+        };
+      }
       return {
-        feedback: normaliseFeedback(feedback),
-        code: extractCode(parsed.code == null ? "" : String(parsed.code))
+        targetName: "micro:bit",
+        namespaceList: "basic,input,music,led,radio,pins,loops,logic,variables,math,functions,arrays,text,game,images,serial,control"
       };
     }
-    return { feedback: [], code: extractCode(raw) };
-  };
 
-  const validateBlocksCompatibility = (code, target) => {
-    const rules = [
-      { re: /=>/g, why: "arrow functions" },
-      { re: /\bclass\s+/g, why: "classes" },
-      { re: /\bnew\s+[A-Z_a-z]/g, why: "new constructor" },
-      { re: /\bPromise\b|\basync\b|\bawait\b/g, why: "promises/async" },
-      { re: /\bimport\s|\bexport\s/g, why: "import/export" },
-      { re: /\$\{[^}]+\}/g, why: "template string interpolation" },
-      { re: /\.\s*(map|forEach|filter|reduce|find|some|every)\s*\(/g, why: "higher-order array methods" },
-      { re: /\bnamespace\b|\bmodule\b/g, why: "namespaces/modules" },
-      { re: /\benum\b|\binterface\b|\btype\s+[A-Z_a-z]/g, why: "TS types/enums" },
-      { re: /<\s*[A-Z_a-z0-9_,\s]+>/g, why: "generics syntax" },
-      { re: /setTimeout\s*\(|setInterval\s*\(/g, why: "timers" },
-      { re: /console\./g, why: "console calls" },
-      { re: /^\s*\/\//m, why: "line comments" },
-      { re: /\/\*[\s\S]*?\*\//g, why: "block comments" },
-      { re: /\brandint\s*\(/g, why: "randint()" },
-      { re: /(\*=|\/=|%=|\|=|&=|\^=|<<=|>>=|>>>=)/g, why: "unsupported assignment operators" }
-    ];
-    const bitwiseRules = [
-      /<<|>>>|>>/,
-      /\^/,
-      /(^|[^|])\|([^|=]|$)/m,
-      /(^|[^&])&([^&=]|$)/m
-    ];
-    const eventRegistrationRe = /\b(?:basic\.forever|loops\.forever|input\.on[A-Z_a-z0-9_]*|radio\.on[A-Z_a-z0-9_]*|pins\.on[A-Z_a-z0-9_]*|controller\.[A-Z_a-z0-9_]*\.onEvent|controller\.on[A-Z_a-z0-9_]*|sprites\.on[A-Z_a-z0-9_]*|scene\.on[A-Z_a-z0-9_]*|game\.on[A-Z_a-z0-9_]*|info\.on[A-Z_a-z0-9_]*|control\.inBackground)\s*\(/;
+    const DEFAULT_CURRENT_CODE_TRUNCATION_MARKER = "\n// ... CURRENT_CODE_TRUNCATED ...\n";
 
-    if ((target === "microbit" || target === "maker") && /sprites\.|controller\.|scene\.|game\.onUpdate/i.test(code)) {
-      return { ok: false, violations: ["Arcade APIs in micro:bit/Maker"] };
-    }
-    if (target === "arcade" && (/led\./i.test(code) || /radio\./i.test(code))) {
-      return { ok: false, violations: ["micro:bit APIs in Arcade"] };
+    function boundCurrentCodeForPrompt(currentCode, {
+      maxChars = 0,
+      truncationMarker = DEFAULT_CURRENT_CODE_TRUNCATION_MARKER
+    } = {}) {
+      const source = String(currentCode || "");
+      if (!source.trim()) {
+        return { text: "", truncated: false, omittedChars: 0 };
+      }
+      if (!maxChars || source.length <= maxChars) {
+        return { text: source, truncated: false, omittedChars: 0 };
+      }
+
+      const budget = Math.max(0, maxChars - truncationMarker.length);
+      const headBudget = Math.floor(budget * 0.65);
+      const tailBudget = Math.max(0, budget - headBudget);
+      const head = source.slice(0, headBudget).trimEnd();
+      const tail = source.slice(source.length - tailBudget).trimStart();
+      const omittedChars = Math.max(0, source.length - (head.length + tail.length));
+
+      return {
+        text: head + truncationMarker + tail,
+        truncated: true,
+        omittedChars
+      };
     }
 
-    const violations = [];
-    const stringStrippedCode = code.replace(
-      /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g,
-      (match) => " ".repeat(match.length)
-    );
-    for (const rule of rules) {
-      if (rule.re.test(code)) violations.push(rule.why);
-    }
-    if (/\bnull\b/.test(stringStrippedCode)) violations.push("null");
-    if (/\bundefined\b/.test(stringStrippedCode)) violations.push("undefined");
-    if (/\bas\s+[A-Z_a-z][A-Z_a-z0-9_.]*/.test(stringStrippedCode)) violations.push("casts");
-    if (bitwiseRules.some((rule) => rule.test(code))) violations.push("bitwise operators");
-    if (/\bfor\s*\([^)]*\bin\b[^)]*\)/.test(code)) violations.push("for...in loops");
-
-    const forHeaderRe = /for\s*\(([^)]*)\)/g;
-    let forMatch;
-    while ((forMatch = forHeaderRe.exec(code))) {
-      const header = forMatch[1].trim();
-      if (/\bof\b/.test(header)) continue;
-      const parts = header.split(";").map((part) => part.trim());
-      if (parts.length !== 3) {
-        violations.push("invalid for-loop shape");
-        continue;
-      }
-      const initMatch = parts[0].match(/^let\s+([A-Z_a-z][A-Z_a-z0-9_]*)\s*=\s*0$/);
-      if (!initMatch) {
-        violations.push("for-loop initializer must be let i = 0");
-        continue;
-      }
-      const indexVar = initMatch[1];
-      if (!new RegExp("^" + indexVar + "\\s*(<|<=)\\s*.+$").test(parts[1])) {
-        violations.push("for-loop condition must be i < limit or i <= limit");
-      }
-      if (!new RegExp("^(?:" + indexVar + "\\+\\+|\\+\\+" + indexVar + ")$").test(parts[2])) {
-        violations.push("for-loop increment must be i++");
-      }
-    }
-
-    const lines = code.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-    let depth = 0;
-    for (const line of lines) {
-      const trimmed = line.trim();
-      const lineDepth = depth;
-      if (trimmed) {
-        if (lineDepth > 0 && eventRegistrationRe.test(trimmed)) violations.push("nested event registration");
-        const fnDecl = trimmed.match(/^function\s+([A-Z_a-z][A-Z_a-z0-9_]*)\s*\(([^)]*)\)/);
-        if (fnDecl) {
-          if (lineDepth > 0) violations.push("non-top-level function declaration");
-          const params = fnDecl[2].trim();
-          if (params && (params.includes("?") || params.includes("="))) {
-            violations.push("optional/default parameters in function declaration");
+    function buildUserPrompt({
+      request,
+      currentCode,
+      pageErrors,
+      conversionDialog,
+      recentChat,
+      maxCurrentCodeChars = 0,
+      truncationMarker = DEFAULT_CURRENT_CODE_TRUNCATION_MARKER
+    } = {}) {
+      const blocks = [];
+      const recentChatTurns = Array.isArray(recentChat) ? recentChat : [];
+      if (recentChatTurns.length) {
+        const histLines = ["<<<RECENT_CHAT>>>"];
+        for (const turn of recentChatTurns) {
+          if (turn.role === "user") {
+            histLines.push("Last user message: " + String(turn.content || "").trim());
+          } else if (turn.role === "assistant") {
+            histLines.push("Last assistant notes: " + String(turn.notes || "").trim());
           }
         }
-        if (/^let\s+[A-Z_a-z][A-Z_a-z0-9_]*(\s*:\s*[^=;]+)?\s*;?$/.test(trimmed)) {
-          violations.push("variable declaration without initializer");
+        histLines.push("<<<END_RECENT_CHAT>>>");
+        blocks.push(histLines.join("\n"));
+      }
+
+      blocks.push("USER_REQUEST:\n" + String(request || "").trim());
+
+      const errors = Array.isArray(pageErrors)
+        ? pageErrors.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      if (errors.length) {
+        blocks.push("<<<PAGE_ERRORS>>>\n- " + errors.join("\n- ") + "\n<<<END_PAGE_ERRORS>>>");
+      }
+
+      const dialogTitle = conversionDialog && conversionDialog.title ? String(conversionDialog.title).trim() : "";
+      const dialogDescription = conversionDialog && conversionDialog.description ? String(conversionDialog.description).trim() : "";
+      if (dialogTitle || dialogDescription) {
+        const lines = [];
+        if (dialogTitle) lines.push("Title: " + dialogTitle);
+        if (dialogDescription) lines.push("Message: " + dialogDescription);
+        blocks.push("<<<CONVERSION_DIALOG>>>\n" + lines.join("\n") + "\n<<<END_CONVERSION_DIALOG>>>");
+      }
+
+      const boundedCurrentCode = boundCurrentCodeForPrompt(currentCode, {
+        maxChars: maxCurrentCodeChars,
+        truncationMarker
+      });
+      if (boundedCurrentCode.text) {
+        if (boundedCurrentCode.truncated && maxCurrentCodeChars > 0) {
+          blocks.push(
+            "<<<CURRENT_CODE_NOTE>>>\n"
+            + "Current code was truncated for prompt size. Omitted approx "
+            + boundedCurrentCode.omittedChars
+            + " chars from the middle.\n<<<END_CURRENT_CODE_NOTE>>>"
+          );
+        }
+        blocks.push("<<<CURRENT_CODE>>>\n" + boundedCurrentCode.text + "\n<<<END_CURRENT_CODE>>>");
+      }
+
+      return blocks.join("\n\n");
+    }
+
+    function extractJsonObjectCandidates(text) {
+      const matches = [];
+      let depth = 0;
+      let start = -1;
+      let inString = false;
+      let escaped = false;
+
+      for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+
+        if (inString) {
+          if (escaped) {
+            escaped = false;
+            continue;
+          }
+          if (char === "\\") {
+            escaped = true;
+            continue;
+          }
+          if (char === "\"") inString = false;
+          continue;
+        }
+
+        if (char === "\"") {
+          inString = true;
+          continue;
+        }
+
+        if (char === "{") {
+          if (depth === 0) start = i;
+          depth += 1;
+          continue;
+        }
+
+        if (char === "}" && depth > 0) {
+          depth -= 1;
+          if (depth === 0 && start !== -1) {
+            matches.push(text.slice(start, i + 1));
+            start = -1;
+          }
         }
       }
-      const opens = (line.match(/\{/g) || []).length;
-      const closes = (line.match(/\}/g) || []).length;
-      depth = Math.max(0, depth + opens - closes);
+
+      return matches;
     }
-    if (/[^\x09\x0A\x0D\x20-\x7E]/.test(code)) violations.push("non-ASCII characters");
-    return { ok: violations.length === 0, violations: [...new Set(violations)] };
-  };
+
+    function parseJsonObjectsFromText(raw) {
+      const text = String(raw || "").trim();
+      if (!text) return [];
+      const candidates = [text];
+      const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fencedMatch && fencedMatch[1]) candidates.push(fencedMatch[1].trim());
+      candidates.push(...extractJsonObjectCandidates(text));
+      const parsedObjects = [];
+      const seen = new Set();
+      for (const candidate of candidates) {
+        const source = String(candidate || "").trim();
+        if (!source || seen.has(source)) continue;
+        seen.add(source);
+        try {
+          const parsed = JSON.parse(source);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            parsedObjects.push(parsed);
+          }
+        } catch (error) {
+        }
+      }
+      return parsedObjects;
+    }
+
+    function isModelOutputObject(parsed) {
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+      return Object.prototype.hasOwnProperty.call(parsed, "code");
+    }
+
+    function extractCode(raw) {
+      if (!raw) return "";
+      const match = String(raw).match(/```[a-z]*\n([\s\S]*?)```/i);
+      const code = match ? match[1] : raw;
+      return sanitizeMakeCode(code);
+    }
+
+    function parseModelOutput(raw) {
+      const parsedObjects = parseJsonObjectsFromText(raw);
+      for (const parsed of parsedObjects) {
+        if (!isModelOutputObject(parsed)) continue;
+        const rawFeedback = Array.isArray(parsed.feedback)
+          ? parsed.feedback
+          : (parsed.feedback == null ? [] : [parsed.feedback]);
+        return {
+          feedback: normaliseFeedback(rawFeedback),
+          code: extractCode(parsed.code == null ? "" : String(parsed.code))
+        };
+      }
+      return { feedback: [], code: extractCode(raw) };
+    }
+
+    function validateBlocksCompatibility(code, target) {
+      const rules = [
+        { re: /=>/g, why: "arrow functions" },
+        { re: /\bclass\s+/g, why: "classes" },
+        { re: /\bnew\s+[A-Z_a-z]/g, why: "new constructor" },
+        { re: /\bPromise\b|\basync\b|\bawait\b/g, why: "promises/async" },
+        { re: /\bimport\s|\bexport\s/g, why: "import/export" },
+        { re: /\$\{[^}]+\}/g, why: "template string interpolation" },
+        { re: /\.\s*(map|forEach|filter|reduce|find|some|every)\s*\(/g, why: "higher-order array methods" },
+        { re: /\bnamespace\b|\bmodule\b/g, why: "namespaces/modules" },
+        { re: /\benum\b|\binterface\b|\btype\s+[A-Z_a-z]/g, why: "TS types/enums" },
+        { re: /<\s*[A-Z_a-z0-9_,\s]+>/g, why: "generics syntax" },
+        { re: /setTimeout\s*\(|setInterval\s*\(/g, why: "timers" },
+        { re: /console\./g, why: "console calls" },
+        { re: /^\s*\/\//m, why: "line comments" },
+        { re: /\/\*[\s\S]*?\*\//g, why: "block comments" },
+        { re: /\brandint\s*\(/g, why: "randint()" },
+        { re: /(\*=|\/=|%=|\|=|&=|\^=|<<=|>>=|>>>=)/g, why: "unsupported assignment operators" }
+      ];
+      const bitwiseRules = [
+        /<<|>>>|>>/,
+        /\^/,
+        /(^|[^|])\|([^|=]|$)/m,
+        /(^|[^&])&([^&=]|$)/m
+      ];
+      const eventRegistrationRe = /\b(?:basic\.forever|loops\.forever|input\.on[A-Z_a-z0-9_]*|radio\.on[A-Z_a-z0-9_]*|pins\.on[A-Z_a-z0-9_]*|controller\.[A-Z_a-z0-9_]*\.onEvent|controller\.on[A-Z_a-z0-9_]*|sprites\.on[A-Z_a-z0-9_]*|scene\.on[A-Z_a-z0-9_]*|game\.on[A-Z_a-z0-9_]*|info\.on[A-Z_a-z0-9_]*|control\.inBackground)\s*\(/;
+
+      if ((target === "microbit" || target === "maker") && /sprites\.|controller\.|scene\.|game\.onUpdate/i.test(code)) {
+        return { ok: false, violations: ["Arcade APIs in micro:bit/Maker"] };
+      }
+      if (target === "arcade" && (/led\./i.test(code) || /radio\./i.test(code))) {
+        return { ok: false, violations: ["micro:bit APIs in Arcade"] };
+      }
+
+      const violations = [];
+      const stringStrippedCode = code.replace(
+        /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g,
+        (match) => " ".repeat(match.length)
+      );
+      for (const rule of rules) {
+        if (rule.re.test(code)) violations.push(rule.why);
+      }
+      if (/\bnull\b/.test(stringStrippedCode)) violations.push("null");
+      if (/\bundefined\b/.test(stringStrippedCode)) violations.push("undefined");
+      if (/\bas\s+[A-Z_a-z][A-Z_a-z0-9_.]*/.test(stringStrippedCode)) violations.push("casts");
+      if (bitwiseRules.some((rule) => rule.test(code))) violations.push("bitwise operators");
+      if (/\bfor\s*\([^)]*\bin\b[^)]*\)/.test(code)) violations.push("for...in loops");
+
+      const forHeaderRe = /for\s*\(([^)]*)\)/g;
+      let forMatch;
+      while ((forMatch = forHeaderRe.exec(code))) {
+        const header = forMatch[1].trim();
+        if (/\bof\b/.test(header)) continue;
+        const parts = header.split(";").map((part) => part.trim());
+        if (parts.length !== 3) {
+          violations.push("invalid for-loop shape");
+          continue;
+        }
+        const initMatch = parts[0].match(/^let\s+([A-Z_a-z][A-Z_a-z0-9_]*)\s*=\s*0$/);
+        if (!initMatch) {
+          violations.push("for-loop initializer must be let i = 0");
+          continue;
+        }
+        const indexVar = initMatch[1];
+        if (!new RegExp("^" + indexVar + "\\s*(<|<=)\\s*.+$").test(parts[1])) {
+          violations.push("for-loop condition must be i < limit or i <= limit");
+        }
+        if (!new RegExp("^(?:" + indexVar + "\\+\\+|\\+\\+" + indexVar + ")$").test(parts[2])) {
+          violations.push("for-loop increment must be i++");
+        }
+      }
+
+      const lines = code.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+      let depth = 0;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const lineDepth = depth;
+        if (trimmed) {
+          if (lineDepth > 0 && eventRegistrationRe.test(trimmed)) violations.push("nested event registration");
+          const fnDecl = trimmed.match(/^function\s+([A-Z_a-z][A-Z_a-z0-9_]*)\s*\(([^)]*)\)/);
+          if (fnDecl) {
+            if (lineDepth > 0) violations.push("non-top-level function declaration");
+            const params = fnDecl[2].trim();
+            if (params && (params.includes("?") || params.includes("="))) {
+              violations.push("optional/default parameters in function declaration");
+            }
+          }
+          if (/^let\s+[A-Z_a-z][A-Z_a-z0-9_]*(\s*:\s*[^=;]+)?\s*;?$/.test(trimmed)) {
+            violations.push("variable declaration without initializer");
+          }
+        }
+        const opens = (line.match(/\{/g) || []).length;
+        const closes = (line.match(/\}/g) || []).length;
+        depth = Math.max(0, depth + opens - closes);
+      }
+
+      if (/[^\x09\x0A\x0D\x20-\x7E]/.test(code)) violations.push("non-ASCII characters");
+      return { ok: violations.length === 0, violations: [...new Set(violations)] };
+    }
+
+    function stubForTarget(target) {
+      if (target === "arcade") {
+        return [
+          "controller.A.onEvent(ControllerButtonEvent.Pressed, function () {",
+          "    game.splash(\"Start!\")",
+          "})",
+          "game.onUpdate(function () {",
+          "})"
+        ].join("\n");
+      }
+      if (target === "maker") {
+        return ["loops.forever(function () {", "})"].join("\n");
+      }
+      return [
+        "basic.onStart(function () {",
+        "    basic.showString(\"Hi\")",
+        "})"
+      ].join("\n");
+    }
+
+    function extractGeminiText(response) {
+      try {
+        if (!response) return "";
+        if (response.candidates && response.candidates.length > 0) {
+          const candidate = response.candidates[0];
+          if (candidate.finishReason && String(candidate.finishReason).toUpperCase().includes("BLOCK")) return "";
+          const parts = (candidate.content && candidate.content.parts) || [];
+          let text = "";
+          for (const part of parts) {
+            if (part.text) text += part.text;
+          }
+          return (text || "").trim();
+        }
+      } catch {
+        return "";
+      }
+      return "";
+    }
+
+    return {
+      sanitizeMakeCode,
+      normaliseFeedback,
+      resolvePromptTargetContext,
+      buildUserPrompt,
+      parseModelOutput,
+      validateBlocksCompatibility,
+      stubForTarget,
+      extractGeminiText,
+    };
+  })();
+  // END_SHARED_COMPAT_CORE
 
   let BASE_TEMP = 0.1;
   let MAXTOK = 3072;
 
   const sysFor = (target) => {
-    let namespaceList = "basic,input,music,led,radio,pins,loops,logic,variables,math,functions,arrays,text,game,images,serial,control";
-    let targetName = "micro:bit";
-    if (target === "arcade") {
-      namespaceList = "controller,game,scene,sprites,info,music,effects";
-      targetName = "Arcade";
-    }
-    if (target === "maker") {
-      namespaceList = "pins,input,loops,music";
-      targetName = "Maker";
-    }
+    const { namespaceList, targetName } = resolvePromptTargetContext(target);
     return [
-      "ROLE: You are a friendly Microsoft MakeCode assistant helping a student build a " + targetName + " project. You are having a conversation \u2013 be helpful, brief, and encouraging.",
+      "ROLE: You are a friendly Microsoft MakeCode assistant helping a student build a " + targetName + " project. You are having a conversation – be helpful, brief, and encouraging.",
       "HARD REQUIREMENT: Return ONLY Microsoft MakeCode Static JavaScript that the MakeCode decompiler can convert to BLOCKS for " + targetName + " with ZERO errors.",
       "CONVERSATION CONTEXT: If RECENT_CHAT is provided, use only that recent context. Treat CURRENT_CODE as the source of truth for project state.",
       "CONTEXT LIMITS: CURRENT_CODE may include a truncation note if the project is large. When truncated, make conservative edits and preserve existing patterns.",
@@ -2035,87 +2199,16 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   const MAX_CURRENT_CODE_PROMPT_CHARS = 12000;
   const CURRENT_CODE_TRUNCATION_MARKER = "\n// ... CURRENT_CODE_TRUNCATED ...\n";
 
-  const boundCurrentCodeForPrompt = (currentCode) => {
-    const source = String(currentCode || "");
-    if (!source.trim()) {
-      return { text: "", truncated: false, omittedChars: 0 };
-    }
-    if (source.length <= MAX_CURRENT_CODE_PROMPT_CHARS) {
-      return { text: source, truncated: false, omittedChars: 0 };
-    }
-
-    const budget = Math.max(0, MAX_CURRENT_CODE_PROMPT_CHARS - CURRENT_CODE_TRUNCATION_MARKER.length);
-    const headBudget = Math.floor(budget * 0.65);
-    const tailBudget = Math.max(0, budget - headBudget);
-    const head = source.slice(0, headBudget).trimEnd();
-    const tail = source.slice(source.length - tailBudget).trimStart();
-    const omittedChars = Math.max(0, source.length - (head.length + tail.length));
-
-    return {
-      text: head + CURRENT_CODE_TRUNCATION_MARKER + tail,
-      truncated: true,
-      omittedChars
-    };
-  };
-
   const userFor = (request, currentCode, pageErrors, conversionDialog, recentChat) => {
-    const blocks = [];
-
-    /* include bounded recent chat context (no historical code payloads) */
-    if (recentChat && recentChat.length > 0) {
-      const histLines = ["<<<RECENT_CHAT>>>"];
-      for (const turn of recentChat) {
-        if (turn.role === "user") {
-          histLines.push("Last user message: " + String(turn.content || "").trim());
-        } else if (turn.role === "assistant") {
-          histLines.push("Last assistant notes: " + String(turn.notes || "").trim());
-        }
-      }
-      histLines.push("<<<END_RECENT_CHAT>>>");
-      blocks.push(histLines.join("\n"));
-    }
-
-    blocks.push("USER_REQUEST:\n" + request.trim());
-    const errors = (pageErrors || []).filter((item) => item && String(item).trim());
-    if (errors.length) {
-      blocks.push("<<<PAGE_ERRORS>>>\n- " + errors.join("\n- ") + "\n<<<END_PAGE_ERRORS>>>");
-    }
-    const dialogTitle = conversionDialog && conversionDialog.title ? String(conversionDialog.title).trim() : "";
-    const dialogDescription = conversionDialog && conversionDialog.description ? String(conversionDialog.description).trim() : "";
-    if (dialogTitle || dialogDescription) {
-      const lines = [];
-      if (dialogTitle) lines.push("Title: " + dialogTitle);
-      if (dialogDescription) lines.push("Message: " + dialogDescription);
-      blocks.push("<<<CONVERSION_DIALOG>>>\n" + lines.join("\n") + "\n<<<END_CONVERSION_DIALOG>>>");
-    }
-    const boundedCurrentCode = boundCurrentCodeForPrompt(currentCode);
-    if (boundedCurrentCode.text) {
-      if (boundedCurrentCode.truncated) {
-        blocks.push("<<<CURRENT_CODE_NOTE>>>\nCurrent code was truncated for prompt size. Omitted approx " + boundedCurrentCode.omittedChars + " chars from the middle.\n<<<END_CURRENT_CODE_NOTE>>>");
-      }
-      blocks.push("<<<CURRENT_CODE>>>\n" + boundedCurrentCode.text + "\n<<<END_CURRENT_CODE>>>");
-    }
-    return blocks.join("\n\n");
-  };
-
-  const stubForTarget = (target) => {
-    if (target === "arcade") {
-      return [
-        "controller.A.onEvent(ControllerButtonEvent.Pressed, function () {",
-        "    game.splash(\"Start!\")",
-        "})",
-        "game.onUpdate(function () {",
-        "})"
-      ].join("\n");
-    }
-    if (target === "maker") {
-      return ["loops.forever(function () {", "})"].join("\n");
-    }
-    return [
-      "basic.onStart(function () {",
-      "    basic.showString(\"Hi\")",
-      "})"
-    ].join("\n");
+    return buildUserPrompt({
+      request,
+      currentCode,
+      pageErrors,
+      conversionDialog,
+      recentChat,
+      maxCurrentCodeChars: MAX_CURRENT_CODE_PROMPT_CHARS,
+      truncationMarker: CURRENT_CODE_TRUNCATION_MARKER
+    });
   };
 
   /* ── provider calls ──────────────────────────────────────── */
@@ -2129,24 +2222,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     ]);
   };
 
-  const extractGeminiText = (response) => {
-    try {
-      if (!response) return "";
-      if (response.candidates && response.candidates.length > 0) {
-        const candidate = response.candidates[0];
-        if (candidate.finishReason && String(candidate.finishReason).toUpperCase().includes("BLOCK")) return "";
-        const parts = (candidate.content && candidate.content.parts) || [];
-        let text = "";
-        for (const part of parts) {
-          if (part.text) text += part.text;
-        }
-        return (text || "").trim();
-      }
-      if (response.promptFeedback && response.promptFeedback.blocked) return "";
-    } catch (error) {
-    }
-    return "";
-  };
+
 
   const parseModelList = (model) => {
     if (!model) return [];

@@ -6,6 +6,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:watch": "node --watch scripts/build.mjs",
+    "sync:compat-core": "node scripts/sync-compat-core.mjs",
+    "check:compat-core": "node scripts/sync-compat-core.mjs --check",
     "dev:watch-reload": "node scripts/dev/watch-build-reload.mjs",
     "package": "npm run build && node scripts/package.mjs",
     "backend:start": "node apps/backend/src/server.mjs",
