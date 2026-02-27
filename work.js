@@ -109,6 +109,9 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   const ui = document.createElement("div");
   ui.id = "vibbit-panel";
+  ui.setAttribute("role", "dialog");
+  ui.setAttribute("aria-modal", "true");
+  ui.setAttribute("aria-label", "Vibbit");
   ui.style.cssText = "width:680px;max-width:calc(100vw - 48px);max-height:80vh;background:#0b1020;color:#e6e8ef;font-family:system-ui,Segoe UI,Arial,sans-serif;border:1px solid #21304f;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden";
 
   /* ── build HTML ──────────────────────────────────────────── */
@@ -198,11 +201,11 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
     /* input area */
     + '<div style="flex-shrink:0;border-top:1px solid #1f2b47;padding:12px 16px;background:#0d1528">'
-    + '  <textarea id="p" rows="2" placeholder="Describe what you want the block code to do\u2026" style="width:100%;resize:none;min-height:44px;max-height:120px;padding:10px 12px;border-radius:10px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef;font-size:13px;line-height:1.4;box-sizing:border-box;font-family:inherit"></textarea>'
+    + '  <textarea id="p" rows="2" aria-label="Describe what you want the block code to do" placeholder="Describe what you want the block code to do\u2026" style="width:100%;resize:none;min-height:44px;max-height:120px;padding:10px 12px;border-radius:10px;border:1px solid #29324e;background:#0b1020;color:#e6e8ef;font-size:13px;line-height:1.4;box-sizing:border-box;font-family:inherit"></textarea>'
     + '  <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:8px">'
     + '    <div style="display:flex;gap:8px;align-items:center">'
-    + '      <button id="new-chat-btn" style="display:none;padding:6px 14px;border:1px solid #29324e;border-radius:8px;background:transparent;color:#8899bb;font-size:12px;font-weight:500;cursor:pointer">New</button>'
-    + '      <button id="go" style="padding:8px 20px;border:none;border-radius:8px;background:#3454D1;color:#fff;font-weight:600;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">Send <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>'
+    + '      <button id="new-chat-btn" aria-label="Start a new chat" style="display:none;padding:6px 14px;border:1px solid #29324e;border-radius:8px;background:transparent;color:#8899bb;font-size:12px;font-weight:500;cursor:pointer">New</button>'
+    + '      <button id="go" aria-label="Send message" style="padding:8px 20px;border:none;border-radius:8px;background:#3454D1;color:#fff;font-weight:600;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">Send <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>'
     + '    </div>'
     + '  </div>'
 
@@ -297,11 +300,11 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   previewBar.id = "vibbit-preview-bar";
   previewBar.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:10px;padding:8px 14px;border-radius:999px;background:rgba(10,17,35,.94);border:1px solid #21304f;box-shadow:0 6px 24px rgba(0,0,0,.45);z-index:2147483646";
   previewBar.innerHTML = ""
-    + '<button id="preview-return" style="padding:6px 16px;border:none;border-radius:999px;background:#3454D1;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">'
-    + '  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L3 7l6 6"/></svg>'
+    + '<button id="preview-return" aria-label="Return to Vibbit" style="padding:6px 16px;border:none;border-radius:999px;background:#3454D1;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">'
+    + '  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L3 7l6 6"/></svg>'
     + '  Return to Vibbit'
     + '</button>'
-    + '<button id="preview-new" style="padding:6px 14px;border:1px solid #29324e;border-radius:999px;background:transparent;color:#8899bb;font-size:12px;font-weight:500;cursor:pointer">New Chat</button>';
+    + '<button id="preview-new" aria-label="Start a new chat" style="padding:6px 14px;border:1px solid #29324e;border-radius:999px;background:transparent;color:#8899bb;font-size:12px;font-weight:500;cursor:pointer">New Chat</button>';
   document.body.appendChild(previewBar);
 
   /* hidden elements for backwards-compat refs */
@@ -389,7 +392,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
 
   /* ── backdrop click to close ───────────────────────────── */
   backdrop.addEventListener("mousedown", function (e) {
-    if (e.target === backdrop) closePanel();
+    if (e.target === backdrop && !busy) closePanel();
   });
 
   /* ── element references ──────────────────────────────────── */
@@ -766,7 +769,12 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
   };
 
   const escapeHTML = (str) => {
-    return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   };
 
   const addChatMessage = (msg, options) => {
@@ -2684,7 +2692,9 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
         lastConversionDialog = dialog;
         if (conversionRetryCount < 1) {
           conversionRetryCount += 1;
+          includeCurrentForThisSend = true;
           logLine("MakeCode could not convert to Blocks. Retrying once with a conversion-fix prompt.");
+          logLine("Retry will include current JavaScript context.");
           setLoadingPhase("convert");
           return runGenerationAttempt(buildConversionFixRequest(dialog), dialog, { snapshot: false }).catch(handleGenerationFailure);
         }
