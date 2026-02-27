@@ -2415,7 +2415,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       if (json && json.error) message = json.error;
       throw new Error(message);
     } catch (error) {
-      if (timedOut) throw new Error("Managed backend timeout");
+      if (timedOut) throw new Error("The server took too long to respond. Please try again.");
       throw error;
     } finally {
       clearTimeout(timeoutId);
