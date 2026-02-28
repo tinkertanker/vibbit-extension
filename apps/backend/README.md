@@ -11,6 +11,7 @@ The backend keeps provider API keys server-side and proxies generation requests.
 
 ## Endpoints
 
+- `GET /` (informational landing page)
 - `GET /healthz`
 - `GET /admin` (teacher/admin panel)
 - `GET /admin/status` (admin JSON)

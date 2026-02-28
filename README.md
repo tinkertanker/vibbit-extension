@@ -25,6 +25,7 @@ This repo ships one Vibbit runtime supporting both:
 - Session bootstrap endpoint:
   - `POST {BACKEND}/vibbit/connect`
 - Admin endpoints:
+  - `GET {BACKEND}/` (informational landing page)
   - `GET {BACKEND}/admin`
   - `GET {BACKEND}/admin/status`
   - `GET {BACKEND}/bookmarklet`
