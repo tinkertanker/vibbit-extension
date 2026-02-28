@@ -7,6 +7,7 @@ COPY apps/backend/package*.json apps/backend/
 RUN cd apps/backend && npm install --omit=dev
 
 COPY apps/backend/ ./apps/backend/
+COPY shared/ ./shared/
 
 EXPOSE 8787
 ENV PORT=8787
