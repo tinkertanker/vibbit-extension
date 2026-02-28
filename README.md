@@ -68,6 +68,17 @@ Build-time backend overrides:
 VIBBIT_BACKEND="https://your-server.example" VIBBIT_APP_TOKEN="optional-token" npm run build
 ```
 
+## Shared compat core
+
+`work.js` (BYOK runtime) and `apps/backend/src/runtime.mjs` (managed runtime) share generated compat helpers from:
+
+- `shared/makecode-compat-core.mjs`
+
+Sync/check commands:
+
+- `npm run sync:compat-core` updates the generated block in `work.js`
+- `npm run check:compat-core` fails if the generated block is stale
+
 ## Run backend locally (teacher laptop)
 
 ```bash

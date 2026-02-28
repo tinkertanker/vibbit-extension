@@ -31,6 +31,8 @@ function pushCheck(step, pass, detail) {
 }
 
 async function runBuildAndPackage() {
+  await runCommand("npm", ["run", "check:compat-core"], { cwd: repoRoot });
+  pushCheck("Compat core sync", true, "`npm run check:compat-core` passed.");
   await runCommand("npm", ["run", "build"], { cwd: repoRoot });
   await runCommand("npm", ["run", "package"], { cwd: repoRoot });
   await assertFileExists(path.join(repoRoot, "dist", "content-script.js"));
