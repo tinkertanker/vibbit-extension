@@ -53,6 +53,7 @@ Use `VIBBIT_BOOKMARKLET_RUNTIME_URL` when generating production bookmarklet link
   - Extension calls `POST {BACKEND}/vibbit/connect` and receives a session token
   - Generation uses that session token on `POST {BACKEND}/vibbit/generate`
 - Endpoints:
+  - `GET {BACKEND}/` (informational landing page)
   - `GET {BACKEND}/healthz`
   - `GET {BACKEND}/admin` (`?code=<CLASSCODE>` in classroom mode)
   - `GET {BACKEND}/admin/status`

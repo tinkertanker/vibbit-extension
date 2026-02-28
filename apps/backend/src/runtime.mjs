@@ -1436,7 +1436,7 @@ export function createBackendRuntime(options = {}) {
       return handleOptions(origin, runtimeConfig);
     }
 
-    if (pathname === "/" && request.method === "GET") {
+    if (rawPathname === "/" && request.method === "GET") {
       const html = renderLandingPage();
       return respondHtml(200, html, origin, runtimeConfig);
     }
