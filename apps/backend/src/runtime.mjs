@@ -938,8 +938,6 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-<<<<<<< ours
-<<<<<<< ours
 function escapeTextarea(value) {
   return String(value ?? "").replace(/<\/textarea/gi, "<\\/textarea");
 }
@@ -1004,101 +1002,6 @@ function renderBookmarkletInstallPage({ managedHref, byokHref, runtimeUrl, enabl
     "</body>",
     "</html>"
   ].join("");
-=======
-=======
->>>>>>> theirs
-function renderLandingPage(requestUrl) {
-  const repoUrl = "https://github.com/Tinkertanker/vibbit";
-  const tinkercademyUrl = "https://tinkercademy.com";
-  const canonicalUrl = "https://vibbit.tk.sg";
-  const slidesUrl = "#slides-link-coming-soon";
-  const installUrl = "#installation-instructions-coming-soon";
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Vibbit</title>
-    <style>
-      :root {
-        color-scheme: light dark;
-        --bg: #0b1220;
-        --panel: #121b2c;
-        --text: #e8eefc;
-        --muted: #b8c4df;
-        --link: #7ec8ff;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        font: 16px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-        background: radial-gradient(circle at top, #1a2640, var(--bg));
-        color: var(--text);
-      }
-      main {
-        width: min(760px, 92vw);
-        padding: 2rem;
-        border-radius: 1rem;
-        background: color-mix(in srgb, var(--panel) 92%, black 8%);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-      }
-      h1 { margin: 0 0 0.75rem; font-size: clamp(2rem, 7vw, 3rem); }
-      p { margin: 0.7rem 0; color: var(--muted); }
-      a { color: var(--link); text-decoration: none; }
-      a:hover { text-decoration: underline; }
-      .brand {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-      }
-      .brand svg { flex-shrink: 0; }
-      .links {
-        list-style: none;
-        margin: 1.2rem 0 0;
-        padding: 0;
-      }
-      .links li { margin: 0.55rem 0; }
-      .row { display: inline-flex; align-items: center; gap: 0.45rem; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <div class="brand">
-        <svg width="56" height="56" viewBox="0 0 128 128" role="img" aria-label="Vibbit icon">
-          <circle cx="64" cy="64" r="60" fill="#1ec28b" />
-          <circle cx="46" cy="50" r="9" fill="#0b1220" />
-          <circle cx="82" cy="50" r="9" fill="#0b1220" />
-          <path d="M34 84c9 10 19 15 30 15s21-5 30-15" fill="none" stroke="#0b1220" stroke-width="8" stroke-linecap="round"/>
-        </svg>
-        <h1>Vibbit</h1>
-      </div>
-
-      <p>Vibbit is an AI coding assistant for MakeCode classrooms, with both managed backend mode and BYOK provider support.</p>
-      <p>Canonical website: <a href="${escapeHtml(canonicalUrl)}" target="_blank" rel="noreferrer">${escapeHtml(canonicalUrl)}</a>.</p>
-
-      <ul class="links">
-        <li>
-          <a class="row" href="${escapeHtml(repoUrl)}" target="_blank" rel="noreferrer">
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.01.08-2.1 0 0 .67-.21 2.2.82a7.49 7.49 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.09.16 1.9.08 2.1.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-            Tinkertanker/vibbit on GitHub
-          </a>
-        </li>
-        <li>Initiative by <a href="${escapeHtml(tinkercademyUrl)}" target="_blank" rel="noreferrer">Tinkercademy</a>.</li>
-        <li><a href="${escapeHtml(slidesUrl)}">Launch slides (Micro:bit Live 2026) — coming soon</a></li>
-        <li><a href="${escapeHtml(installUrl)}">Installation &amp; instructions — coming soon</a></li>
-      </ul>
-    </main>
-  </body>
-</html>`;
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
 }
 
 function renderAdminPanel(runtimeConfig, sessionStore, requestUrl, adminProviderState, adminAuthToken) {
@@ -1426,8 +1329,6 @@ export function createBackendRuntime(options = {}) {
       return handleOptions(origin, runtimeConfig);
     }
 
-<<<<<<< ours
-<<<<<<< ours
     if (runtimeConfig.bookmarkletEnabled && pathname === BOOKMARKLET_RUNTIME_ROUTE && request.method === "GET") {
       const publicOrigin = resolvePublicOrigin(request, requestUrl);
       const runtimeSource = buildBookmarkletRuntimeSource(bookmarkletRuntimeTemplate, publicOrigin);
@@ -1454,14 +1355,6 @@ export function createBackendRuntime(options = {}) {
         runtimeUrl,
         enableByok: runtimeConfig.bookmarkletEnableByok
       });
-=======
-    if (pathname === "/" && request.method === "GET") {
-      const html = renderLandingPage(requestUrl);
->>>>>>> theirs
-=======
-    if (pathname === "/" && request.method === "GET") {
-      const html = renderLandingPage(requestUrl);
->>>>>>> theirs
       return respondHtml(200, html, origin, runtimeConfig);
     }
 
