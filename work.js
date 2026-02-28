@@ -1780,6 +1780,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     normaliseFeedback,
     resolvePromptTargetContext,
     buildUserPrompt,
+    extractCode,
     parseModelOutput,
     validateBlocksCompatibility,
     stubForTarget,
@@ -2140,6 +2141,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
     function extractGeminiText(response) {
       try {
         if (!response) return "";
+        if (response.promptFeedback && response.promptFeedback.blocked) return "";
         if (response.candidates && response.candidates.length > 0) {
           const candidate = response.candidates[0];
           if (candidate.finishReason && String(candidate.finishReason).toUpperCase().includes("BLOCK")) return "";
@@ -2161,6 +2163,7 @@ const APP_TOKEN = ""; // set only if your server enforces SERVER_APP_TOKEN
       normaliseFeedback,
       resolvePromptTargetContext,
       buildUserPrompt,
+      extractCode,
       parseModelOutput,
       validateBlocksCompatibility,
       stubForTarget,

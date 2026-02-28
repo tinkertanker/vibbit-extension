@@ -3,6 +3,7 @@ export const SHARED_COMPAT_EXPORT_NAMES = [
   "normaliseFeedback",
   "resolvePromptTargetContext",
   "buildUserPrompt",
+  "extractCode",
   "parseModelOutput",
   "validateBlocksCompatibility",
   "stubForTarget",
@@ -219,7 +220,7 @@ function isModelOutputObject(parsed) {
   return Object.prototype.hasOwnProperty.call(parsed, "code");
 }
 
-function extractCode(raw) {
+export function extractCode(raw) {
   if (!raw) return "";
   const match = String(raw).match(/```[a-z]*\n([\s\S]*?)```/i);
   const code = match ? match[1] : raw;
@@ -364,6 +365,7 @@ export function stubForTarget(target) {
 export function extractGeminiText(response) {
   try {
     if (!response) return "";
+    if (response.promptFeedback && response.promptFeedback.blocked) return "";
     if (response.candidates && response.candidates.length > 0) {
       const candidate = response.candidates[0];
       if (candidate.finishReason && String(candidate.finishReason).toUpperCase().includes("BLOCK")) return "";
