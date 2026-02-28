@@ -4,7 +4,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY apps/backend/package*.json apps/backend/
-RUN cd apps/backend && npm ci --only=production
+RUN cd apps/backend && npm install --omit=dev
 
 COPY apps/backend/ ./apps/backend/
 
