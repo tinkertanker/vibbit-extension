@@ -8,3 +8,10 @@ output/playwright/
 apps/backend/.env
 .vibbit-backend-state.json
 apps/backend/.vibbit-backend-state.json
+
+# Local deployment files (infrastructure-specific)
+deploy.sh
+docker-compose.yml
+
+# Claude Code settings
+.codex/

@@ -96,13 +96,17 @@ VIBBIT_BACKEND="https://your-server.example" VIBBIT_APP_TOKEN="optional-token" n
 
 Production target: `vibbit.tk.sg` (deployed via Docker on `tinkertanker@dev.tk.sg:Docker/vibbit`)
 
+### Local deployment files (gitignored)
+
+- `deploy.sh` - local script that SSHs to server, pulls latest, rebuilds Docker image, and restarts container
+- `docker-compose.yml` - local Docker Compose config (infrastructure-specific, uses external `devtksg` network)
+- `.codex/` - Claude Code settings and memory
+
 To deploy after any backend changes:
 
 ```bash
 ./deploy.sh
 ```
-
-The deploy script SSHs to the server, pulls latest, rebuilds the Docker image, and restarts the container.
 
 ## Smoke-test checklist
 
