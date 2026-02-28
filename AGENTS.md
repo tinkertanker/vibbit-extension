@@ -90,8 +90,19 @@ VIBBIT_BACKEND="https://your-server.example" VIBBIT_APP_TOKEN="optional-token" n
 - Start backend: `npm run backend:start`
 - Dev backend (watch): `npm run backend:dev`
 - Backend env template: `apps/backend/.env.example`
-- Hosted deployment target: Railway (see `apps/backend/README.md`)
 - Admin panel can save provider keys/models without env vars (persisted via `VIBBIT_STATE_FILE`) and is protected by an admin token (`/admin?admin=...`)
+
+## Deploying the managed backend
+
+Production target: `vibbit.tk.sg` (deployed via Docker on `tinkertanker@dev.tk.sg:Docker/vibbit`)
+
+To deploy after any backend changes:
+
+```bash
+./deploy.sh
+```
+
+The deploy script SSHs to the server, pulls latest, rebuilds the Docker image, and restarts the container.
 
 ## Smoke-test checklist
 
