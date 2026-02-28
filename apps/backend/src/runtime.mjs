@@ -941,7 +941,7 @@ function escapeHtml(value) {
 function renderLandingPage() {
   const repoUrl = "https://github.com/tinkertanker/vibbit";
   const tinkercademyUrl = "https://tinkercademy.com";
-  const slidesUrl = "#slides-link-coming-soon";
+  const slidesUrl = "https://1drv.ms/p/c/21dfaef5d0fccb4a/IQAKZM4cKK8zRYasGC45G6yvAcUdrDNoPAOGWaeOajftVtA";
   const installUrl = "#installation-instructions-coming-soon";
 
   return `<!doctype html>
@@ -1037,7 +1037,7 @@ function renderLandingPage() {
           </a>
         </li>
         <li>A project by <a href="${escapeHtml(tinkercademyUrl)}" target="_blank" rel="noreferrer">Tinkercademy</a> from Singapore.</li>
-        <li><a href="${escapeHtml(slidesUrl)}">Launch slides (Micro:bit Live 2026) — coming soon</a></li>
+        <li><a href="${escapeHtml(slidesUrl)}" target="_blank" rel="noreferrer">Launch slides (Micro:bit Live 2026)</a></li>
         <li><a href="${escapeHtml(installUrl)}">Installation &amp; instructions — coming soon</a></li>
       </ul>
     </main>
