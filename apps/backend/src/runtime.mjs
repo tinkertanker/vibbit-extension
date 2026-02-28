@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   buildTargetPromptExtras,
   buildUserPrompt,
@@ -14,6 +17,19 @@ const DEFAULT_CORS_HEADERS = "Content-Type, Authorization, X-Vibbit-Class-Code, 
 const MAX_JSON_BYTES = 1024 * 1024;
 const CLASS_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const CLASS_CODE_LENGTH = 5;
+const BOOKMARKLET_RUNTIME_ROUTE = "/bookmarklet/runtime.js";
+const BOOKMARKLET_INSTALL_ROUTE = "/bookmarklet";
+const WORK_JS_USERSCRIPT_HEADER_PATTERN = /^\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==\s*/;
+const WORK_JS_BACKEND_CONST_PATTERN = /const BACKEND = ".*?";/;
+const WORK_JS_APP_TOKEN_CONST_PATTERN = /const APP_TOKEN = ".*?";/;
+
+const runtimeFileDir = dirname(fileURLToPath(import.meta.url));
+const WORK_JS_CANDIDATE_PATHS = [
+  resolve(runtimeFileDir, "../../../work.js"),
+  resolve(process.cwd(), "work.js"),
+  resolve(process.cwd(), "../work.js"),
+  resolve(process.cwd(), "../../work.js")
+];
 
 function parseInteger(value, fallback, { min = Number.MIN_SAFE_INTEGER, max = Number.MAX_SAFE_INTEGER } = {}) {
   const parsed = Number(value);
@@ -35,6 +51,22 @@ function parseCsv(value) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function firstHeaderToken(value) {
+  return String(value || "")
+    .split(",")[0]
+    .trim();
+}
+
+function resolvePublicOrigin(request, requestUrl) {
+  const forwardedProto = firstHeaderToken(request.headers.get("x-forwarded-proto")).toLowerCase();
+  const forwardedHost = firstHeaderToken(request.headers.get("x-forwarded-host"));
+  const protocol = (forwardedProto === "http" || forwardedProto === "https")
+    ? forwardedProto
+    : String((requestUrl && requestUrl.protocol) || "https:").replace(/:$/, "");
+  const host = forwardedHost || firstHeaderToken(request.headers.get("host")) || requestUrl.host;
+  return `${protocol || "https"}://${host}`;
 }
 
 function normaliseProvider(value) {
@@ -320,6 +352,8 @@ function createRuntimeConfig(envInput = {}) {
   const requestTimeoutMs = parseInteger(env.VIBBIT_REQUEST_TIMEOUT_MS, 60000, { min: 5000, max: 180000 });
   const emptyRetries = parseInteger(env.VIBBIT_EMPTY_RETRIES, 2, { min: 0, max: 5 });
   const validationRetries = parseInteger(env.VIBBIT_VALIDATION_RETRIES, 2, { min: 0, max: 5 });
+  const bookmarkletEnabled = parseBoolean(env.VIBBIT_BOOKMARKLET_ENABLED, true);
+  const bookmarkletEnableByok = parseBoolean(env.VIBBIT_BOOKMARKLET_ENABLE_BYOK, false);
   const providerConfig = createProviderConfig(env);
   const appToken = String(env.SERVER_APP_TOKEN || "").trim();
 
@@ -361,6 +395,8 @@ function createRuntimeConfig(envInput = {}) {
     requestTimeoutMs,
     emptyRetries,
     validationRetries,
+    bookmarkletEnabled,
+    bookmarkletEnableByok,
     providerConfig,
     appToken,
     authMode,
@@ -409,6 +445,17 @@ function respondHtml(status, html, origin, config) {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       ...buildCorsHeaders(origin, config)
+    }
+  });
+}
+
+function respondJavaScript(status, source, origin, config, extraHeaders = {}) {
+  return new Response(source, {
+    status,
+    headers: {
+      "Content-Type": "application/javascript; charset=utf-8",
+      ...buildCorsHeaders(origin, config),
+      ...extraHeaders
     }
   });
 }
@@ -812,7 +859,10 @@ function getPublicServerConfig(runtimeConfig, effectiveProviderConfig = runtimeC
     classCodeLength: runtimeConfig.classCodeLength,
     enabledProviders: effectiveProviderConfig.enabledProviders,
     defaultProvider,
-    defaultModel: effectiveProviderConfig.defaultModelFor(defaultProvider)
+    defaultModel: effectiveProviderConfig.defaultModelFor(defaultProvider),
+    bookmarkletEnabled: Boolean(runtimeConfig.bookmarkletEnabled),
+    bookmarkletByokEnabled: Boolean(runtimeConfig.bookmarkletEnableByok),
+    bookmarkletInstallPath: BOOKMARKLET_INSTALL_ROUTE
   };
 }
 
@@ -823,7 +873,13 @@ function buildAdminStatus(runtimeConfig, sessionStore, adminProviderState) {
     timestamp: new Date().toISOString(),
     ...getPublicServerConfig(runtimeConfig, effectiveProviderConfig),
     allowOrigin: runtimeConfig.allowOrigin,
-    activeSessions: sessionStore.size()
+    activeSessions: sessionStore.size(),
+    bookmarklet: {
+      enabled: Boolean(runtimeConfig.bookmarkletEnabled),
+      byokEnabled: Boolean(runtimeConfig.bookmarkletEnableByok),
+      installPath: BOOKMARKLET_INSTALL_ROUTE,
+      runtimePath: BOOKMARKLET_RUNTIME_ROUTE
+    }
   };
 
   const providerModels = {};
@@ -882,6 +938,169 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+<<<<<<< ours
+<<<<<<< ours
+function escapeTextarea(value) {
+  return String(value ?? "").replace(/<\/textarea/gi, "<\\/textarea");
+}
+
+function renderBookmarkletInstallPage({ managedHref, byokHref, runtimeUrl, enableByok }) {
+  const byokSection = enableByok
+    ? [
+      "<section class=\"card\">",
+      "<h2>Optional BYOK bookmarklet</h2>",
+      "<p>Use this only if your students should enter provider keys directly in the browser.</p>",
+      `<p><a class="bookmarklet" href="${escapeHtml(byokHref)}">Vibbit (BYOK enabled)</a></p>`,
+      `<textarea readonly>${escapeTextarea(byokHref)}</textarea>`,
+      "</section>"
+    ].join("")
+    : "";
+
+  return [
+    "<!doctype html>",
+    "<html lang=\"en\">",
+    "<head>",
+    "<meta charset=\"utf-8\">",
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+    "<title>Vibbit Bookmarklet</title>",
+    "<style>",
+    "body{margin:0;background:#0b1324;color:#e6edf8;font:14px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif}",
+    ".wrap{max-width:980px;margin:32px auto;padding:0 16px}",
+    ".card{background:#111b33;border:1px solid #243152;border-radius:12px;padding:16px;margin-bottom:14px}",
+    "h1{margin:0 0 6px;font-size:24px}",
+    "h2{margin:0 0 8px;font-size:17px}",
+    "p{margin:8px 0;color:#c0cee8}",
+    ".bookmarklet{display:inline-block;padding:10px 14px;border-radius:10px;background:#2b6de8;color:#fff;text-decoration:none;font-weight:600}",
+    ".bookmarklet:hover{background:#245fd0}",
+    "code,textarea{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}",
+    "textarea{width:100%;min-height:84px;box-sizing:border-box;border:1px solid #2a3a5f;border-radius:8px;background:#091127;color:#e6edf8;padding:10px}",
+    "ol{margin:8px 0 0 20px;color:#c0cee8}",
+    "li{margin:4px 0}",
+    "</style>",
+    "</head>",
+    "<body>",
+    "<main class=\"wrap\">",
+    "<section class=\"card\">",
+    "<h1>Install Vibbit Bookmarklet</h1>",
+    "<p>This page is hosted by your Vibbit backend, so students can launch Vibbit without installing a browser extension.</p>",
+    "<ol>",
+    "<li>Show the bookmarks bar in your browser.</li>",
+    "<li>Drag the bookmarklet button below into the bookmarks bar.</li>",
+    "<li>Open a MakeCode project page and click the bookmark.</li>",
+    "</ol>",
+    "</section>",
+    "<section class=\"card\">",
+    "<h2>Managed classroom bookmarklet</h2>",
+    "<p>Recommended for schools. Students use server URL + class code; provider keys stay on your backend.</p>",
+    `<p><a class="bookmarklet" href="${escapeHtml(managedHref)}">Vibbit (Managed)</a></p>`,
+    `<textarea readonly>${escapeTextarea(managedHref)}</textarea>`,
+    "</section>",
+    byokSection,
+    "<section class=\"card\">",
+    "<h2>Runtime URL</h2>",
+    `<p><code>${escapeHtml(runtimeUrl)}</code></p>`,
+    "</section>",
+    "</main>",
+    "</body>",
+    "</html>"
+  ].join("");
+=======
+=======
+>>>>>>> theirs
+function renderLandingPage(requestUrl) {
+  const repoUrl = "https://github.com/Tinkertanker/vibbit";
+  const tinkercademyUrl = "https://tinkercademy.com";
+  const canonicalUrl = "https://vibbit.tk.sg";
+  const slidesUrl = "#slides-link-coming-soon";
+  const installUrl = "#installation-instructions-coming-soon";
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vibbit</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0b1220;
+        --panel: #121b2c;
+        --text: #e8eefc;
+        --muted: #b8c4df;
+        --link: #7ec8ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font: 16px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: radial-gradient(circle at top, #1a2640, var(--bg));
+        color: var(--text);
+      }
+      main {
+        width: min(760px, 92vw);
+        padding: 2rem;
+        border-radius: 1rem;
+        background: color-mix(in srgb, var(--panel) 92%, black 8%);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      }
+      h1 { margin: 0 0 0.75rem; font-size: clamp(2rem, 7vw, 3rem); }
+      p { margin: 0.7rem 0; color: var(--muted); }
+      a { color: var(--link); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .brand svg { flex-shrink: 0; }
+      .links {
+        list-style: none;
+        margin: 1.2rem 0 0;
+        padding: 0;
+      }
+      .links li { margin: 0.55rem 0; }
+      .row { display: inline-flex; align-items: center; gap: 0.45rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <svg width="56" height="56" viewBox="0 0 128 128" role="img" aria-label="Vibbit icon">
+          <circle cx="64" cy="64" r="60" fill="#1ec28b" />
+          <circle cx="46" cy="50" r="9" fill="#0b1220" />
+          <circle cx="82" cy="50" r="9" fill="#0b1220" />
+          <path d="M34 84c9 10 19 15 30 15s21-5 30-15" fill="none" stroke="#0b1220" stroke-width="8" stroke-linecap="round"/>
+        </svg>
+        <h1>Vibbit</h1>
+      </div>
+
+      <p>Vibbit is an AI coding assistant for MakeCode classrooms, with both managed backend mode and BYOK provider support.</p>
+      <p>Canonical website: <a href="${escapeHtml(canonicalUrl)}" target="_blank" rel="noreferrer">${escapeHtml(canonicalUrl)}</a>.</p>
+
+      <ul class="links">
+        <li>
+          <a class="row" href="${escapeHtml(repoUrl)}" target="_blank" rel="noreferrer">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.01.08-2.1 0 0 .67-.21 2.2.82a7.49 7.49 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.09.16 1.9.08 2.1.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+            Tinkertanker/vibbit on GitHub
+          </a>
+        </li>
+        <li>Initiative by <a href="${escapeHtml(tinkercademyUrl)}" target="_blank" rel="noreferrer">Tinkercademy</a>.</li>
+        <li><a href="${escapeHtml(slidesUrl)}">Launch slides (Micro:bit Live 2026) — coming soon</a></li>
+        <li><a href="${escapeHtml(installUrl)}">Installation &amp; instructions — coming soon</a></li>
+      </ul>
+    </main>
+  </body>
+</html>`;
+<<<<<<< ours
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+}
+
 function renderAdminPanel(runtimeConfig, sessionStore, requestUrl, adminProviderState, adminAuthToken) {
   const status = buildAdminStatus(runtimeConfig, sessionStore, adminProviderState);
   const authHint = adminAuthToken
@@ -894,6 +1113,7 @@ function renderAdminPanel(runtimeConfig, sessionStore, requestUrl, adminProvider
   const configUrl = `${baseUrl}/vibbit/config`;
   const statusUrl = `${baseUrl}/admin/status${authQuery}`;
   const saveConfigUrl = `${baseUrl}/admin/config${authQuery}`;
+  const bookmarkletUrl = `${baseUrl}${BOOKMARKLET_INSTALL_ROUTE}`;
   const saveNotice = requestUrl.searchParams.get("saved") === "1"
     ? "<p class=\"notice\">Provider settings saved.</p>"
     : "";
@@ -986,6 +1206,7 @@ function renderAdminPanel(runtimeConfig, sessionStore, requestUrl, adminProvider
     "<h2>Quick Links</h2>",
     `<p><a href="${escapeHtml(healthzUrl)}" target="_blank" rel="noreferrer">/healthz</a></p>`,
     `<p><a href="${escapeHtml(configUrl)}" target="_blank" rel="noreferrer">/vibbit/config</a></p>`,
+    `<p><a href="${escapeHtml(bookmarkletUrl)}" target="_blank" rel="noreferrer">${BOOKMARKLET_INSTALL_ROUTE}</a></p>`,
     `<p><a href="${escapeHtml(statusUrl)}" target="_blank" rel="noreferrer">/admin/status</a></p>`,
     "</div>",
     "<div class=\"card\">",
@@ -1050,6 +1271,10 @@ function buildStartupInfo(runtimeConfig, { listenUrl, effectiveProviderConfig } 
   if (getAuthMode(runtimeConfig) === "classroom") {
     info.push(`[Vibbit backend] Share with students -> URL: ${listenUrl || "<your-server-url>"} | class code: ${runtimeConfig.classroomCode}`);
   }
+  if (runtimeConfig.bookmarkletEnabled) {
+    info.push(`[Vibbit backend] Bookmarklet install page -> ${(listenUrl || "<your-server-url>") + BOOKMARKLET_INSTALL_ROUTE}`);
+    info.push(`[Vibbit backend] Bookmarklet runtime -> ${(listenUrl || "<your-server-url>") + BOOKMARKLET_RUNTIME_ROUTE}`);
+  }
   if (getAuthMode(runtimeConfig) === "app-token") {
     info.push("[Vibbit backend] SERVER_APP_TOKEN auth enabled");
   }
@@ -1075,9 +1300,75 @@ function classifyRequestError(error, runtimeConfig) {
   return { status: 500, message };
 }
 
+function loadBookmarkletRuntimeTemplate() {
+  for (const candidatePath of WORK_JS_CANDIDATE_PATHS) {
+    try {
+      const source = readFileSync(candidatePath, "utf8");
+      if (!source) continue;
+      return source.replace(WORK_JS_USERSCRIPT_HEADER_PATTERN, "");
+    } catch {
+    }
+  }
+  return "";
+}
+
+function buildBookmarkletRuntimeSource(templateSource, backendUrl) {
+  if (!templateSource) {
+    return [
+      `console.error(${JSON.stringify("Vibbit bookmarklet runtime source is unavailable on this backend deployment.")});`,
+      `alert(${JSON.stringify("Vibbit bookmarklet runtime is not available on this server.")});`
+    ].join("\n");
+  }
+
+  let output = templateSource;
+  const backendLine = `const BACKEND = ${JSON.stringify(backendUrl)};`;
+  const appTokenLine = 'const APP_TOKEN = "";';
+
+  output = WORK_JS_BACKEND_CONST_PATTERN.test(output)
+    ? output.replace(WORK_JS_BACKEND_CONST_PATTERN, backendLine)
+    : `${backendLine}\n${output}`;
+  output = WORK_JS_APP_TOKEN_CONST_PATTERN.test(output)
+    ? output.replace(WORK_JS_APP_TOKEN_CONST_PATTERN, appTokenLine)
+    : `${appTokenLine}\n${output}`;
+
+  return output;
+}
+
+function buildBookmarkletLoaderSource(runtimeUrl, config) {
+  return (
+    "(function(){" +
+      "try{" +
+        "var w=window,d=document;" +
+        "w.__vibbitBookmarkletConfig=Object.assign({},w.__vibbitBookmarkletConfig||{}," + JSON.stringify(config || {}) + ");" +
+        "if(w.__vibbit&&typeof w.__vibbit.reinvoke==='function'){" +
+          "if(w.__vibbit.reinvoke()!==false)return;" +
+        "}" +
+        "var src=" + JSON.stringify(runtimeUrl) + ";" +
+        "if(!src){alert('Vibbit bookmarklet runtime URL is not configured.');return;}" +
+        "var id='vibbit-bookmarklet-runtime';" +
+        "var existing=d.getElementById(id);" +
+        "if(existing&&existing.parentNode){existing.parentNode.removeChild(existing);}" +
+        "var script=d.createElement('script');" +
+        "script.id=id;" +
+        "script.async=true;" +
+        "script.src=src+(src.indexOf('?')===-1?'?':'&')+'v='+Date.now();" +
+        "script.onerror=function(){alert('Vibbit bookmarklet could not load its runtime.');};" +
+        "(d.head||d.documentElement).appendChild(script);" +
+      "}catch(err){" +
+        "alert('Vibbit bookmarklet failed: '+(err&&err.message?err.message:String(err)));" +
+      "}" +
+    "})();"
+  );
+}
+
+function buildBookmarkletHref(runtimeUrl, config) {
+  return "javascript:" + buildBookmarkletLoaderSource(runtimeUrl, config);
+}
+
 export function createBackendRuntime(options = {}) {
   const env = options.env || (typeof process !== "undefined" ? process.env : {});
   const runtimeConfig = createRuntimeConfig(env);
+  const bookmarkletRuntimeTemplate = loadBookmarkletRuntimeTemplate();
   const sessionStore = createSessionStore(runtimeConfig.sessionTtlMs);
   const adminAuthToken = String(
     options.adminAuthToken
@@ -1133,6 +1424,45 @@ export function createBackendRuntime(options = {}) {
 
     if (request.method === "OPTIONS") {
       return handleOptions(origin, runtimeConfig);
+    }
+
+<<<<<<< ours
+<<<<<<< ours
+    if (runtimeConfig.bookmarkletEnabled && pathname === BOOKMARKLET_RUNTIME_ROUTE && request.method === "GET") {
+      const publicOrigin = resolvePublicOrigin(request, requestUrl);
+      const runtimeSource = buildBookmarkletRuntimeSource(bookmarkletRuntimeTemplate, publicOrigin);
+      return respondJavaScript(200, runtimeSource, origin, runtimeConfig, {
+        "Cache-Control": "no-store"
+      });
+    }
+
+    if (runtimeConfig.bookmarkletEnabled && pathname === BOOKMARKLET_INSTALL_ROUTE && request.method === "GET") {
+      const publicOrigin = resolvePublicOrigin(request, requestUrl);
+      const runtimeUrl = `${publicOrigin}${BOOKMARKLET_RUNTIME_ROUTE}`;
+      const managedHref = buildBookmarkletHref(runtimeUrl, {
+        forceMode: "managed",
+        enableManaged: true,
+        enableByok: false
+      });
+      const byokHref = buildBookmarkletHref(runtimeUrl, {
+        enableManaged: true,
+        enableByok: true
+      });
+      const html = renderBookmarkletInstallPage({
+        managedHref,
+        byokHref,
+        runtimeUrl,
+        enableByok: runtimeConfig.bookmarkletEnableByok
+      });
+=======
+    if (pathname === "/" && request.method === "GET") {
+      const html = renderLandingPage(requestUrl);
+>>>>>>> theirs
+=======
+    if (pathname === "/" && request.method === "GET") {
+      const html = renderLandingPage(requestUrl);
+>>>>>>> theirs
+      return respondHtml(200, html, origin, runtimeConfig);
     }
 
     if (pathname === "/healthz" && request.method === "GET") {
