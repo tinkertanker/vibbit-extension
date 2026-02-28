@@ -882,6 +882,113 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function renderLandingPage() {
+  const repoUrl = "https://github.com/tinkertanker/vibbit";
+  const tinkercademyUrl = "https://tinkercademy.com";
+  const slidesUrl = "#slides-link-coming-soon";
+  const installUrl = "#installation-instructions-coming-soon";
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vibbit</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0b1220;
+        --panel: #121b2c;
+        --text: #e8eefc;
+        --muted: #b8c4df;
+        --link: #7ec8ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font: 16px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: radial-gradient(circle at top, #1a2640, var(--bg));
+        color: var(--text);
+      }
+      main {
+        width: min(760px, 92vw);
+        padding: 2rem;
+        border-radius: 1rem;
+        background: color-mix(in srgb, var(--panel) 92%, black 8%);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      }
+      h1 { margin: 0 0 0.75rem; font-size: clamp(2rem, 7vw, 3rem); }
+      p { margin: 0.7rem 0; color: var(--muted); }
+      a { color: var(--link); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .brand svg { flex-shrink: 0; }
+      .links {
+        list-style: none;
+        margin: 1.2rem 0 0;
+        padding: 0;
+      }
+      .links li { margin: 0.55rem 0; }
+      .row { display: inline-flex; align-items: center; gap: 0.45rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <svg width="56" height="56" viewBox="0 0 128 128" role="img" aria-label="Vibbit frog icon" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="frog-gradient" x1="20" y1="22" x2="108" y2="108" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#34D399"/>
+              <stop offset="1" stop-color="#16A34A"/>
+            </linearGradient>
+            <mask id="frog-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+              <rect width="128" height="128" fill="black"/>
+              <g transform="translate(64 64) scale(1.2) translate(-64 -64)">
+                <g fill="white">
+                  <circle cx="64" cy="68" r="36"/>
+                  <circle cx="44" cy="38" r="15.4"/>
+                  <circle cx="84" cy="38" r="15.4"/>
+                  <path d="M25 104C25 90 31 84 40 84C49 84 55 90 55 104Z"/>
+                  <path d="M73 104C73 90 79 84 88 84C97 84 103 90 103 104Z"/>
+                </g>
+                <circle cx="44" cy="38" r="5.5" fill="black"/>
+                <circle cx="84" cy="38" r="5.5" fill="black"/>
+                <path d="M55 104C55 98 59 93 64 93C69 93 73 98 73 104Z" fill="black"/>
+                <path d="M64 44.7L69 55.5L79.8 61.3L69 67.1L64 77.9L59 67.1L48.2 61.3L59 55.5L64 44.7Z" fill="black"/>
+              </g>
+            </mask>
+          </defs>
+          <rect width="128" height="128" fill="url(#frog-gradient)" mask="url(#frog-mask)"/>
+        </svg>
+        <h1>Vibbit</h1>
+      </div>
+
+      <p>Vibbit is an AI coding assistant for micro:bit MakeCode, available as a Chrome extension and bookmarklet, with both managed backend mode and BYOK provider support.</p>
+
+      <ul class="links">
+        <li>
+          <a class="row" href="${escapeHtml(repoUrl)}" target="_blank" rel="noreferrer">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.01.08-2.1 0 0 .67-.21 2.2.82a7.49 7.49 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.09.16 1.9.08 2.1.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+            tinkertanker/vibbit on GitHub
+          </a>
+        </li>
+        <li>A project by <a href="${escapeHtml(tinkercademyUrl)}" target="_blank" rel="noreferrer">Tinkercademy</a> from Singapore.</li>
+        <li><a href="${escapeHtml(slidesUrl)}">Launch slides (Micro:bit Live 2026) — coming soon</a></li>
+        <li><a href="${escapeHtml(installUrl)}">Installation &amp; instructions — coming soon</a></li>
+      </ul>
+    </main>
+  </body>
+</html>`;
+}
+
 function renderAdminPanel(runtimeConfig, sessionStore, requestUrl, adminProviderState, adminAuthToken) {
   const status = buildAdminStatus(runtimeConfig, sessionStore, adminProviderState);
   const authHint = adminAuthToken
@@ -1133,6 +1240,11 @@ export function createBackendRuntime(options = {}) {
 
     if (request.method === "OPTIONS") {
       return handleOptions(origin, runtimeConfig);
+    }
+
+    if (pathname === "/" && request.method === "GET") {
+      const html = renderLandingPage();
+      return respondHtml(200, html, origin, runtimeConfig);
     }
 
     if (pathname === "/healthz" && request.method === "GET") {
