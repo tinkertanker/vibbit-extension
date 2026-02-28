@@ -9,7 +9,7 @@
     "sync:compat-core": "node scripts/sync-compat-core.mjs",
     "check:compat-core": "node scripts/sync-compat-core.mjs --check",
     "dev:watch-reload": "node scripts/dev/watch-build-reload.mjs",
-    "package": "npm run build && node scripts/package.mjs",
+    "package": "npm run check:compat-core && npm run build && node scripts/package.mjs",
     "backend:start": "node apps/backend/src/server.mjs",
     "backend:dev": "node --watch apps/backend/src/server.mjs",
     "audit:smoke": "node scripts/audit/smoke.mjs",
